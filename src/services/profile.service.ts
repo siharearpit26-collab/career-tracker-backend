@@ -1,0 +1,89 @@
+import { userRepository } from '../repositories/user.repository';
+import { IUserDocument, UserResponseDTO, UserProfileDTO } from '../types';
+import { NotFoundError, BadRequestError } from '../utils/errors';
+
+export class ProfileService {
+  private sanitizeUser(user: IUserDocument): UserResponseDTO {
+    return {
+      id: user._id.toString(),
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role,
+      profileImage: user.profileImage,
+      resumeUrl: user.resumeUrl,
+      isEmailVerified: user.isEmailVerified,
+      preferences: user.preferences,
+      createdAt: user.createdAt,
+    };
+  }
+
+  async getProfile(userId: string): Promise<UserResponseDTO> {
+    const user = await userRepository.findById(userId);
+    if (!user) throw new NotFoundError('User not found');
+    return this.sanitizeUser(user);
+  }
+
+  async updateProfile(
+    userId: string,
+    data: UserProfileDTO
+  ): Promise<UserResponseDTO> {
+    const user = await userRepository.update(
+      userId,
+      data as Partial<IUserDocument>
+    );
+    if (!user) throw new NotFoundError('User not found');
+    return this.sanitizeUser(user);
+  }
+
+  async updateProfileImage(
+    userId: string,
+    imageUrl: string
+  ): Promise<UserResponseDTO> {
+    const user = await userRepository.update(userId, {
+      profileImage: imageUrl,
+    } as Partial<IUserDocument>);
+    if (!user) throw new NotFoundError('User not found');
+    return this.sanitizeUser(user);
+  }
+
+  async updateResume(
+    userId: string,
+    resumeUrl: string
+  ): Promise<UserResponseDTO> {
+    const user = await userRepository.update(userId, {
+      resumeUrl,
+    } as Partial<IUserDocument>);
+    if (!user) throw new NotFoundError('User not found');
+    return this.sanitizeUser(user);
+  }
+
+  async updatePreferences(
+    userId: string,
+    preferences: Partial<IUserDocument['preferences']>
+  ): Promise<UserResponseDTO> {
+    const user = await userRepository.findById(userId);
+    if (!user) throw new NotFoundError('User not found');
+
+    const updated = await userRepository.update(userId, {
+      preferences: { ...user.preferences, ...preferences },
+    } as Partial<IUserDocument>);
+
+    if (!updated) throw new NotFoundError('User not found');
+    return this.sanitizeUser(updated);
+  }
+
+  async deleteAccount(userId: string, password: string): Promise<void> {
+    const user = await userRepository.findByEmail(
+      (await userRepository.findById(userId))?.email ?? ''
+    );
+    if (!user) throw new NotFoundError('User not found');
+
+    const isValid = await user.comparePassword(password);
+    if (!isValid) throw new BadRequestError('Incorrect password');
+
+    await userRepository.deactivate(userId);
+  }
+}
+
+export const profileService = new ProfileService();
