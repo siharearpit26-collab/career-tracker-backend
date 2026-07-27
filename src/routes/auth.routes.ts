@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, RequestHandler } from 'express';
 import { authController } from '../controllers/auth.controller';
 import { authenticate } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
@@ -60,23 +60,23 @@ router.post(
 );
 
 // Protected routes
-router.post('/logout', authenticate, authController.logout);
+router.post('/logout', authenticate as RequestHandler, authController.logout as RequestHandler);
 
-router.post('/logout-all', authenticate, authController.logoutAll);
+router.post('/logout-all', authenticate as RequestHandler, authController.logoutAll as RequestHandler);
 
 router.post(
   '/resend-verification',
-  authenticate,
-  authController.resendVerification
+  authenticate as RequestHandler,
+  authController.resendVerification as RequestHandler
 );
 
 router.post(
   '/change-password',
-  authenticate,
+  authenticate as RequestHandler,
   validate(changePasswordSchema),
-  authController.changePassword
+  authController.changePassword as RequestHandler
 );
 
-router.get('/me', authenticate, authController.getMe);
+router.get('/me', authenticate as RequestHandler, authController.getMe as RequestHandler);
 
 export default router;

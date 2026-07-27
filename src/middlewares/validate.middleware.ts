@@ -11,7 +11,7 @@ export const validate = (schema: ZodSchema, target: ValidationTarget = 'body') =
       const parsed = schema.parse(data);
 
       // Replace request data with parsed/sanitized data
-      (req as Record<string, unknown>)[target] = parsed;
+      (req as unknown as Record<string, unknown>)[target] = parsed;
 
       next();
     } catch (error) {

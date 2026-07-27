@@ -1,5 +1,4 @@
 import { userRepository } from '../repositories/user.repository';
-import { applicationRepository } from '../repositories/application.repository';
 import { notificationRepository } from '../repositories/notification.repository';
 import { ActivityLogModel } from '../models';
 import { buildPaginatedResult } from '../utils/pagination.utils';

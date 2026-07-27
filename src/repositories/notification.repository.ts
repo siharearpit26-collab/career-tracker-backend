@@ -1,7 +1,6 @@
 import { Types } from 'mongoose';
 import { NotificationModel } from '../models';
 import { INotificationDocument, CreateNotificationDTO } from '../types';
-import { calculateSkip } from '../utils/pagination.utils';
 
 export class NotificationRepository {
   async create(data: CreateNotificationDTO): Promise<INotificationDocument> {

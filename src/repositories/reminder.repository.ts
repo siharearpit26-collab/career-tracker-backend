@@ -1,7 +1,6 @@
 import { Types } from 'mongoose';
 import { ReminderModel } from '../models';
 import { IReminderDocument, CreateReminderDTO, UpdateReminderDTO } from '../types';
-import { calculateSkip } from '../utils/pagination.utils';
 
 export class ReminderRepository {
   async create(

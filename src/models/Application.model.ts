@@ -160,9 +160,10 @@ const applicationSchema = new Schema<IApplicationDocument>(
     toJSON: {
       virtuals: true,
       transform: (_doc, ret) => {
-        ret['id'] = ret['_id'];
-        delete ret['_id'];
-        delete ret['__v'];
+        const record = ret as Record<string, unknown>;
+        record['id'] = record['_id'];
+        delete record['_id'];
+        delete record['__v'];
         return ret;
       },
     },

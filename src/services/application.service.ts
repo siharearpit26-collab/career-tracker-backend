@@ -7,7 +7,7 @@ import {
   PaginatedResult,
   IApplicationDocument,
 } from '../types';
-import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors';
+import { NotFoundError, BadRequestError } from '../utils/errors';
 import { buildPaginatedResult } from '../utils/pagination.utils';
 
 export class ApplicationService {

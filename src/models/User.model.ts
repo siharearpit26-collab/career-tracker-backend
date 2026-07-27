@@ -102,15 +102,16 @@ const userSchema = new Schema<IUserDocument>(
     toJSON: {
       virtuals: true,
       transform: (_doc, ret) => {
-        ret['id'] = ret['_id'];
-        delete ret['_id'];
-        delete ret['__v'];
-        delete ret['password'];
-        delete ret['refreshTokens'];
-        delete ret['emailVerificationToken'];
-        delete ret['emailVerificationExpires'];
-        delete ret['passwordResetToken'];
-        delete ret['passwordResetExpires'];
+        const record = ret as Record<string, unknown>;
+        record['id'] = record['_id'];
+        delete record['_id'];
+        delete record['__v'];
+        delete record['password'];
+        delete record['refreshTokens'];
+        delete record['emailVerificationToken'];
+        delete record['emailVerificationExpires'];
+        delete record['passwordResetToken'];
+        delete record['passwordResetExpires'];
         return ret;
       },
     },

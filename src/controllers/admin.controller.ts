@@ -14,7 +14,7 @@ export class AdminController {
    *         description: System stats
    */
   async getSystemStats(
-    req: AuthenticatedRequest,
+    _req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
   ): Promise<void> {

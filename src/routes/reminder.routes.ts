@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, RequestHandler } from 'express';
 import { reminderController } from '../controllers/reminder.controller';
 import { authenticate } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
@@ -9,14 +9,14 @@ import {
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate as RequestHandler);
 
-router.get('/upcoming', reminderController.getUpcoming);
-router.get('/', reminderController.getAll);
-router.post('/', validate(createReminderSchema), reminderController.create);
-router.get('/:id', reminderController.getById);
-router.put('/:id', validate(updateReminderSchema), reminderController.update);
-router.delete('/:id', reminderController.delete);
-router.patch('/:id/dismiss', reminderController.dismiss);
+router.get('/upcoming', reminderController.getUpcoming as RequestHandler);
+router.get('/', reminderController.getAll as RequestHandler);
+router.post('/', validate(createReminderSchema), reminderController.create as RequestHandler);
+router.get('/:id', reminderController.getById as RequestHandler);
+router.put('/:id', validate(updateReminderSchema), reminderController.update as RequestHandler);
+router.delete('/:id', reminderController.delete as RequestHandler);
+router.patch('/:id/dismiss', reminderController.dismiss as RequestHandler);
 
 export default router;

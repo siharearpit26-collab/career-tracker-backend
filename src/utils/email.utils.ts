@@ -5,7 +5,7 @@ import { logger } from './logger';
 let transporter: Transporter | null = null;
 
 const createTransporter = (): Transporter => {
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     host: config.email.host,
     port: config.email.port,
     secure: false,
