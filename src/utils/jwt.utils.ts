@@ -1,18 +1,20 @@
-import jwt from 'jsonwebtoken';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 import { config } from '../config';
 import { JwtPayload, TokenPair } from '../types';
 import { UnauthorizedError } from './errors';
 
 export const generateAccessToken = (payload: Omit<JwtPayload, 'iat' | 'exp'>): string => {
-  return jwt.sign(payload, config.jwt.secret, {
-    expiresIn: config.jwt.accessExpiration,
-  });
+  const options: SignOptions = {
+    expiresIn: config.jwt.accessExpiration as SignOptions['expiresIn'],
+  };
+  return jwt.sign(payload, config.jwt.secret, options);
 };
 
 export const generateRefreshToken = (payload: Omit<JwtPayload, 'iat' | 'exp'>): string => {
-  return jwt.sign(payload, config.jwt.refreshSecret, {
-    expiresIn: config.jwt.refreshExpiration,
-  });
+  const options: SignOptions = {
+    expiresIn: config.jwt.refreshExpiration as SignOptions['expiresIn'],
+  };
+  return jwt.sign(payload, config.jwt.refreshSecret, options);
 };
 
 export const generateTokenPair = (payload: Omit<JwtPayload, 'iat' | 'exp'>): TokenPair => {
