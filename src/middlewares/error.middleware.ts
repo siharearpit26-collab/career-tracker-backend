@@ -3,7 +3,6 @@ import { ZodError } from 'zod';
 import mongoose from 'mongoose';
 import { AppError } from '../utils/errors';
 import { logger } from '../utils/logger';
-import { config } from '../config';
 import { ApiResponse } from '../types';
 
 export const errorHandler = (
