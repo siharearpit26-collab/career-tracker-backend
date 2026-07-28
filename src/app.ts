@@ -18,9 +18,20 @@ const app: Application = express();
 
 // Security middleware
 app.use(helmet());
+
+// Clean the CLIENT_URL to remove any invalid characters
+const clientUrl = config.app.clientUrl.trim().replace(/[\r\n\t]/g, '');
+
 app.use(
   cors({
-    origin: config.app.clientUrl,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+      if (origin === clientUrl || origin.endsWith('.netlify.app') || origin.endsWith('.onrender.com')) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
