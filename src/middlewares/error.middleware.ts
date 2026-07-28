@@ -90,7 +90,7 @@ export const errorHandler = (
   // Unknown errors
   const response: ApiResponse = {
     success: false,
-    message: config.app.isProduction ? 'Internal server error' : error.message,
+    message: error.message || 'Internal server error',
   };
   res.status(500).json(response);
 };
