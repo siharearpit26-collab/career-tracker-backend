@@ -9,6 +9,7 @@ import adminRoutes from './admin.routes';
 import profileRoutes from './profile.routes';
 import setupRoutes from './setup.routes';
 import emailRoutes from './email.routes';
+import calendarRoutes from './calendar.routes';
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use('/admin', adminRoutes);
 router.use('/profile', profileRoutes);
 router.use('/setup', setupRoutes);
 router.use('/email', emailRoutes);
+router.use('/calendar', calendarRoutes);
 
 export default router;

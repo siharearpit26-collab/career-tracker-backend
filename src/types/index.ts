@@ -8,3 +8,4 @@ export * from './report.types';
 export * from './common.types';
 export * from './express.types';
 export * from './email.types';
+export * from './calendar.types';

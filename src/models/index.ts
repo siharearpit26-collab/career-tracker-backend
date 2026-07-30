@@ -8,3 +8,4 @@ export { default as ActivityLogModel } from './ActivityLog.model';
 export { default as SettingsModel } from './Settings.model';
 export { default as EmailAccountModel } from './EmailAccount.model';
 export { default as EmailSyncModel } from './EmailSync.model';
+export { default as CalendarEventModel } from './CalendarEvent.model';
