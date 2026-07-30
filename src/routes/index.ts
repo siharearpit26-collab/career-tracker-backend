@@ -8,6 +8,7 @@ import notificationRoutes from './notification.routes';
 import adminRoutes from './admin.routes';
 import profileRoutes from './profile.routes';
 import setupRoutes from './setup.routes';
+import emailRoutes from './email.routes';
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/notifications', notificationRoutes);
 router.use('/admin', adminRoutes);
 router.use('/profile', profileRoutes);
 router.use('/setup', setupRoutes);
+router.use('/email', emailRoutes);
 
 export default router;

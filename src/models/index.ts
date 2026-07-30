@@ -6,3 +6,5 @@ export { default as NotificationModel } from './Notification.model';
 export { default as ReportModel } from './Report.model';
 export { default as ActivityLogModel } from './ActivityLog.model';
 export { default as SettingsModel } from './Settings.model';
+export { default as EmailAccountModel } from './EmailAccount.model';
+export { default as EmailSyncModel } from './EmailSync.model';
