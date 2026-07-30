@@ -95,6 +95,10 @@ export class EmailRepository {
     return result.deletedCount === 1;
   }
 
+  async findAllActiveAccounts(): Promise<IEmailAccountDocument[]> {
+    return EmailAccountModel.find({ isActive: true });
+  }
+
   // Email Sync operations
   async createSyncRecord(data: {
     emailAccountId: string;

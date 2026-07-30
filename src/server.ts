@@ -1,12 +1,16 @@
 import app from './app';
 import { config } from './config';
 import { connectDatabase } from './database/connection';
+import { startBackgroundWorkers } from './jobs';
 import { logger } from './utils/logger';
 
 const startServer = async (): Promise<void> => {
   try {
     // Connect to MongoDB
     await connectDatabase();
+
+    // Start background workers (non-critical, fails gracefully if Redis unavailable)
+    await startBackgroundWorkers();
 
     // Start server
     const server = app.listen(config.app.port, () => {
