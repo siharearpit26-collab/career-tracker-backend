@@ -67,17 +67,7 @@ export class AuthService {
     // Create user
     const user = await userRepository.create(data);
 
-    // Generate email verification token and send email
-    try {
-      const verificationToken = user.generateEmailVerificationToken();
-      await user.save();
-      await sendVerificationEmail(user.email, verificationToken);
-    } catch (emailError) {
-      logger.warn('Failed to send verification email:', emailError);
-      // Don't fail registration if email fails
-    }
-
-    // Generate JWT tokens
+    // Generate JWT tokens first (so response is fast)
     const tokens = generateTokenPair({
       userId: user._id.toString(),
       email: user.email,
@@ -89,6 +79,17 @@ export class AuthService {
       user._id.toString(),
       tokens.refreshToken
     );
+
+    // Send verification email in background (non-blocking)
+    void (async () => {
+      try {
+        const verificationToken = user.generateEmailVerificationToken();
+        await user.save();
+        await sendVerificationEmail(user.email, verificationToken);
+      } catch (emailError) {
+        logger.warn('Failed to send verification email:', emailError);
+      }
+    })();
 
     return { user: this.sanitizeUser(user), tokens };
   }
