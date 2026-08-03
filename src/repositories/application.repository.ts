@@ -107,12 +107,11 @@ export class ApplicationRepository {
       ApplicationModel.find(query)
         .sort({ [sortField]: sortDirection })
         .skip(skip)
-        .limit(pagination.limit)
-        .lean(),
+        .limit(pagination.limit),
       ApplicationModel.countDocuments(query),
     ]);
 
-    return { data: data as unknown as IApplicationDocument[], total };
+    return { data, total };
   }
 
   async countByStatus(
