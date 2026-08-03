@@ -2,6 +2,8 @@ import { emailRepository } from '../repositories/email.repository';
 import { emailSyncService } from './emailSync.service';
 import { applicationRepository } from '../repositories/application.repository';
 import { notificationRepository } from '../repositories/notification.repository';
+import { userRepository } from '../repositories/user.repository';
+import { sendStatusUpdateEmail } from '../utils/email.utils';
 import {
   exchangeGmailCode,
   exchangeOutlookCode,
@@ -237,6 +239,29 @@ export class EmailService {
           type: 'application_update',
           applicationId: finalApplicationId,
         });
+
+        // Send email notification (non-blocking)
+        void (async () => {
+          try {
+            const user = await userRepository.findById(userId);
+            const app = await applicationRepository.findByIdAndUserId(
+              finalApplicationId,
+              userId
+            );
+            if (user && app && user.preferences?.emailNotifications !== false) {
+              await sendStatusUpdateEmail(
+                user.email,
+                user.firstName,
+                app.company,
+                app.jobTitle,
+                suggestedStatus
+              );
+            }
+          } catch (emailErr) {
+            logger.warn('Failed to send status update email notification:', emailErr);
+          }
+        })();
+
       } catch (err) {
         logger.warn('Failed to update application status on confirmation:', err);
       }

@@ -6,6 +6,8 @@ import { decrypt } from '../utils/encryption.utils';
 import { refreshGmailToken, refreshOutlookToken } from '../utils/oauth.utils';
 import { EmailSyncResult, IEmailAccountDocument } from '../types';
 import { logger } from '../utils/logger';
+import { sendStatusUpdateEmail } from '../utils/email.utils';
+import { userRepository } from '../repositories/user.repository';
 
 interface GmailMessage {
   id: string;
@@ -124,7 +126,7 @@ export class EmailSyncService {
             );
             result.statusUpdates++;
 
-            // Create notification
+            // Create in-app notification
             await notificationRepository.create({
               userId: account.userId.toString(),
               title: `Application status updated`,
@@ -132,6 +134,32 @@ export class EmailSyncService {
               type: 'application_update',
               applicationId: classification.applicationId,
             });
+
+            // Send email notification to user (non-blocking)
+            void (async () => {
+              try {
+                const user = await userRepository.findById(account.userId.toString());
+                if (user?.preferences?.emailNotifications !== false) {
+                  const app = await applicationRepository.findByIdAndUserId(
+                    classification.applicationId!,
+                    account.userId.toString()
+                  );
+                  if (user && app) {
+                    await sendStatusUpdateEmail(
+                      user.email,
+                      user.firstName,
+                      app.company,
+                      app.jobTitle,
+                      classification.suggestedStatus!,
+                      email.from
+                    );
+                  }
+                }
+              } catch (emailErr) {
+                logger.warn('Failed to send status update email:', emailErr);
+              }
+            })();
+
           } catch (err) {
             logger.warn('Failed to auto-update application status:', err);
           }
