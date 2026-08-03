@@ -79,12 +79,6 @@ export class ApplicationService {
       throw new BadRequestError('Invalid application ID');
     }
 
-    // Verify ownership first
-    const existing = await applicationRepository.findByIdAndUserId(id, userId);
-    if (!existing) {
-      throw new NotFoundError('Application not found');
-    }
-
     const deleted = await applicationRepository.delete(id, userId);
     if (!deleted) {
       throw new NotFoundError('Application not found');

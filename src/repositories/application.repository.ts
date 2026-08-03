@@ -14,7 +14,7 @@ export class ApplicationRepository {
     userId: string,
     data: CreateApplicationDTO
   ): Promise<IApplicationDocument> {
-    return ApplicationModel.create({ ...data, userId });
+    return ApplicationModel.create({ ...data, userId: new Types.ObjectId(userId) });
   }
 
   async findById(id: string): Promise<IApplicationDocument | null> {
@@ -44,6 +44,9 @@ export class ApplicationRepository {
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id) || !Types.ObjectId.isValid(userId)) {
+      return false;
+    }
     const result = await ApplicationModel.deleteOne({
       _id: new Types.ObjectId(id),
       userId: new Types.ObjectId(userId),
