@@ -1,5 +1,7 @@
 import { emailRepository } from '../repositories/email.repository';
 import { emailSyncService } from './emailSync.service';
+import { applicationRepository } from '../repositories/application.repository';
+import { notificationRepository } from '../repositories/notification.repository';
 import {
   exchangeGmailCode,
   exchangeOutlookCode,
@@ -202,6 +204,42 @@ export class EmailService {
 
     if (!updated) {
       throw new NotFoundError('Email classification not found');
+    }
+
+    // Apply status update when user confirms
+    const finalClassification = isCorrect
+      ? updated.classification
+      : (correctedClassification ?? updated.classification);
+
+    const finalApplicationId = correctedApplicationId
+      ?? updated.applicationId?.toString();
+
+    const statusMap: Partial<Record<EmailClassificationType, string>> = {
+      interview: 'Interview Scheduled',
+      offer: 'Offer',
+      rejection: 'Rejected',
+    };
+
+    const suggestedStatus = statusMap[finalClassification];
+
+    if (finalApplicationId && suggestedStatus) {
+      try {
+        await applicationRepository.update(
+          finalApplicationId,
+          userId,
+          { status: suggestedStatus as 'Interview Scheduled' | 'Offer' | 'Rejected' }
+        );
+
+        await notificationRepository.create({
+          userId,
+          title: 'Application status updated',
+          message: `Your application status was manually updated to "${suggestedStatus}"`,
+          type: 'application_update',
+          applicationId: finalApplicationId,
+        });
+      } catch (err) {
+        logger.warn('Failed to update application status on confirmation:', err);
+      }
     }
 
     return updated;
