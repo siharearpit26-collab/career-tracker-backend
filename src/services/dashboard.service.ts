@@ -48,6 +48,8 @@ export class DashboardService {
       totalRejected,
       totalPending,
       responseRate,
+      interviewRate: totalApplications > 0 ? Math.round((totalInterviews / totalApplications) * 100) : 0,
+      offerRate: totalApplications > 0 ? Math.round((totalOffers / totalApplications) * 100) : 0,
       byStatus,
       bySource,
     };
@@ -91,28 +93,44 @@ export class DashboardService {
     Array<{ date: string; count: number }>
   > {
     const cacheKey = `dashboard:weekly:${userId}`;
-    const cached =
-      await getCache<Array<{ date: string; count: number }>>(cacheKey);
+    const cached = await getCache<Array<{ date: string; count: number }>>(cacheKey);
     if (cached) return cached;
 
-    // Last 7 days
+    // Single aggregation instead of 7 sequential queries
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const result = await ApplicationModel.aggregate([
+      {
+        $match: {
+          userId: new Types.ObjectId(userId),
+          appliedDate: { $gte: sevenDaysAgo },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$appliedDate' },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Build a full 7-day array including days with 0 applications
+    const countByDate: Record<string, number> = {};
+    result.forEach((r: { _id: string; count: number }) => {
+      countByDate[r._id] = r.count;
+    });
+
     const days: Array<{ date: string; count: number }> = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      d.setHours(0, 0, 0, 0);
-      const nextDay = new Date(d);
-      nextDay.setDate(nextDay.getDate() + 1);
-
-      const count = await ApplicationModel.countDocuments({
-        userId: new Types.ObjectId(userId),
-        appliedDate: { $gte: d, $lt: nextDay },
-      });
-
-      days.push({
-        date: d.toISOString().split('T')[0] ?? d.toDateString(),
-        count,
-      });
+      const dateStr = d.toISOString().split('T')[0] ?? '';
+      days.push({ date: dateStr, count: countByDate[dateStr] ?? 0 });
     }
 
     await setCache(cacheKey, days, CACHE_TTL);
