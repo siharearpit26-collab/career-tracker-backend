@@ -65,10 +65,13 @@ export class ProfileService {
     const user = await userRepository.findById(userId);
     if (!user) throw new NotFoundError('User not found');
 
-    const updated = await userRepository.update(userId, {
-      preferences: { ...user.preferences, ...preferences },
-    } as Partial<IUserDocument>);
+    // Use dot notation to update individual preference fields
+    const updateData: Record<string, unknown> = {};
+    Object.entries(preferences).forEach(([key, value]) => {
+      updateData[`preferences.${key}`] = value;
+    });
 
+    const updated = await userRepository.updateRaw(userId, { $set: updateData });
     if (!updated) throw new NotFoundError('User not found');
     return this.sanitizeUser(updated);
   }

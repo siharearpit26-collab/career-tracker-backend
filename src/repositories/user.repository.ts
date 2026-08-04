@@ -29,6 +29,13 @@ export class UserRepository {
     return UserModel.findByIdAndUpdate(id, { $set: data }, { new: true });
   }
 
+  async updateRaw(
+    id: string,
+    update: Record<string, unknown>
+  ): Promise<IUserDocument | null> {
+    return UserModel.findByIdAndUpdate(id, update, { new: true });
+  }
+
   async addRefreshToken(id: string, token: string): Promise<void> {
     await UserModel.findByIdAndUpdate(id, {
       $push: { refreshTokens: token },
