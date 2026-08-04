@@ -239,14 +239,14 @@ export class EmailSyncService {
     }> = [];
 
     try {
-      // Fetch recent messages (last 7 days)
+      // Fetch recent messages (last 30 days)
       const after = Math.floor(
-        (Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000
+        (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000
       );
       const query = `after:${after}`;
 
       const listResponse = await fetch(
-        `https://www.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=50`,
+        `https://www.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=100`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
