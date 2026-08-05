@@ -145,9 +145,9 @@ export class AIEmailAnalyzerService {
     from: string,
     snippet: string
   ): Promise<{ result: AIEmailResponse; method: ProcessingMethod; cached: boolean } | null> {
-    // Check if OpenAI is configured
+    // Check if Gemini is configured
     if (!config.openai.apiKey) {
-      logger.warn('OpenAI API key not configured — AI analysis disabled');
+      logger.warn('Gemini API key not configured — AI analysis disabled');
       this.isAvailable = false;
       return null;
     }
@@ -164,32 +164,32 @@ export class AIEmailAnalyzerService {
       // Cache failure is non-critical
     }
 
-    // Call AI
+    // Call Gemini
     try {
       const userPrompt = `Subject: ${subject}\nFrom: ${from}\nPreview: ${snippet}`;
 
-      // Dynamic import to avoid crash if openai not installed yet
-      const { default: OpenAI } = await import('openai');
-      const client = new OpenAI({ apiKey: config.openai.apiKey });
-
-      const response = await client.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0,
-        max_tokens: 500,
-        response_format: { type: 'json_object' },
+      // Dynamic import to avoid crash if package not installed yet
+      const { GoogleGenerativeAI } = await import('@google/generative-ai');
+      const genAI = new GoogleGenerativeAI(config.openai.apiKey);
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0,
+          maxOutputTokens: 500,
+        },
       });
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('Empty AI response');
+      const prompt = `${SYSTEM_PROMPT}\n\n${userPrompt}`;
+      const result = await model.generateContent(prompt);
+      const content = result.response.text();
+
+      if (!content) throw new Error('Empty Gemini response');
 
       const parsed = JSON.parse(content) as unknown;
 
       if (!validateAIResponse(parsed)) {
-        throw new Error('AI response failed schema validation');
+        throw new Error('Gemini response failed schema validation');
       }
 
       // Cache the result for 24 hours
@@ -200,12 +200,12 @@ export class AIEmailAnalyzerService {
       }
 
       this.isAvailable = true;
-      logger.info(`AI classified "${subject.slice(0, 50)}" as ${parsed.category} (${parsed.confidence}% confidence)`);
+      logger.info(`Gemini classified "${subject.slice(0, 50)}" as ${parsed.category} (${parsed.confidence}% confidence)`);
 
       return { result: parsed, method: 'ai', cached: false };
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
-      logger.warn(`AI analysis failed: ${errMsg}`);
+      logger.warn(`Gemini analysis failed: ${errMsg}`);
       this.isAvailable = false;
       return null;
     }

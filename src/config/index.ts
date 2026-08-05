@@ -82,7 +82,7 @@ export const config = {
     secret: getEnv('SESSION_SECRET', 'fallback-session-secret'),
   },
   openai: {
-    apiKey: process.env['OPENAI_API_KEY'] ?? '',
+    apiKey: process.env['GEMINI_API_KEY'] ?? '',
   },
 } as const;
 
