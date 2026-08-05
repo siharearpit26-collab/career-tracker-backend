@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { UserModel } from '../models';
 import { config } from '../config';
+import { sendEmail } from '../utils/email.utils';
+import { logger } from '../utils/logger';
 
 const router = Router();
 

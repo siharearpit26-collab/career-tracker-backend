@@ -81,6 +81,9 @@ export const config = {
   session: {
     secret: getEnv('SESSION_SECRET', 'fallback-session-secret'),
   },
+  openai: {
+    apiKey: process.env['OPENAI_API_KEY'] ?? '',
+  },
 } as const;
 
 export type Config = typeof config;

@@ -71,113 +71,189 @@ export class EmailSyncService {
           ? await this.fetchGmailEmails(decryptedToken, account.syncCursor)
           : await this.fetchOutlookEmails(decryptedToken, account.lastSyncedAt);
 
-      // Process each email
-      for (const email of emails) {
-        // Check if already synced
-        const existing = await emailRepository.findSyncByMessageId(
-          account._id.toString(),
-          email.messageId
-        );
+      // Process each email in batches of 20 concurrently
+      const BATCH_SIZE = 20;
+      const batchStats = {
+        total: emails.length,
+        preFilterPass: 0,
+        aiAnalyzed: 0,
+        cacheHits: 0,
+        matched: 0,
+        autoUpdated: 0,
+        failed: 0,
+      };
 
-        if (existing) continue;
+      for (let i = 0; i < emails.length; i += BATCH_SIZE) {
+        const batch = emails.slice(i, i + BATCH_SIZE);
 
-        result.newEmails++;
-
-        // Classify the email
-        const classification = await emailClassifierService.classify(
-          account.userId.toString(),
-          email.subject,
-          email.snippet,
-          email.from
-        );
-
-        result.classified++;
-
-        // Save sync record
-        await emailRepository.createSyncRecord({
-          emailAccountId: account._id.toString(),
-          userId: account.userId.toString(),
-          messageId: email.messageId,
-          subject: email.subject,
-          from: email.from,
-          receivedAt: email.receivedAt,
-          snippet: email.snippet,
-          classification: classification.classification,
-          confidence: classification.confidence,
-          applicationId: classification.applicationId,
-          statusUpdate: classification.suggestedStatus,
-        });
-
-        if (classification.applicationId) {
-          result.matched++;
-        }
-
-        // Auto-update status for high confidence matches
-        if (
-          classification.confidence >= 0.8 &&
-          classification.applicationId &&
-          classification.suggestedStatus
-        ) {
+        await Promise.all(batch.map(async (email) => {
           try {
-            await applicationRepository.update(
-              classification.applicationId,
-              account.userId.toString(),
-              { status: classification.suggestedStatus as 'Applied' | 'Interview Scheduled' | 'Offer' | 'Rejected' }
+            // Check if already synced
+            const existing = await emailRepository.findSyncByMessageId(
+              account._id.toString(),
+              email.messageId
             );
-            result.statusUpdates++;
+            if (existing) return;
 
-            // Create in-app notification
-            await notificationRepository.create({
+            result.newEmails++;
+
+            // Classify the email (Stage 1 pre-filter + Stage 2 AI or fallback)
+            const classification = await emailClassifierService.classify(
+              account.userId.toString(),
+              email.subject,
+              email.snippet,
+              email.from,
+              email.threadId
+            );
+
+            if (classification.processingMethod !== 'pre_filter') {
+              batchStats.preFilterPass++;
+              if (classification.processingMethod === 'ai') batchStats.aiAnalyzed++;
+            }
+            result.classified++;
+
+            // Save sync record with all AI fields
+            await emailRepository.createSyncRecord({
+              emailAccountId: account._id.toString(),
               userId: account.userId.toString(),
-              title: `Application status updated`,
-              message: `Your application status was updated to "${classification.suggestedStatus}" based on an email from ${email.from}`,
-              type: 'application_update',
+              messageId: email.messageId,
+              threadId: email.threadId,
+              subject: email.subject,
+              from: email.from,
+              receivedAt: email.receivedAt,
+              snippet: email.snippet,
+              classification: classification.classification,
+              category: classification.category,
+              confidence: classification.confidence,
               applicationId: classification.applicationId,
+              statusUpdate: classification.suggestedStatus,
+              processingMethod: classification.processingMethod,
+              fallbackReason: classification.fallbackReason,
+              recruiterName: classification.recruiterName,
+              recruiterEmail: classification.recruiterEmail,
+              salaryMin: classification.salaryMin,
+              salaryMax: classification.salaryMax,
+              salaryCurrency: classification.salaryCurrency,
+              location: classification.location,
+              requiredAction: classification.requiredAction,
+              summary: classification.summary,
+              importantDates: classification.importantDates,
+              isPendingReview: classification.isPendingReview,
             });
 
-            // Send email notification to user (non-blocking)
-            void (async () => {
+            if (classification.applicationId) {
+              result.matched++;
+              batchStats.matched++;
+            }
+
+            // ── Confidence-based status update logic ──────────────────────
+            const conf = classification.confidence;
+
+            if (
+              conf >= 0.75 &&                          // High confidence threshold
+              classification.applicationId &&
+              classification.suggestedStatus &&
+              !classification.isPendingReview
+            ) {
+              // Auto-update
               try {
-                const user = await userRepository.findById(account.userId.toString());
-                if (user?.preferences?.emailNotifications !== false) {
-                  const app = await applicationRepository.findByIdAndUserId(
-                    classification.applicationId!,
-                    account.userId.toString()
-                  );
-                  if (user && app) {
-                    await sendStatusUpdateEmail(
-                      user.email,
-                      user.firstName,
-                      app.company,
-                      app.jobTitle,
-                      classification.suggestedStatus!,
-                      email.from
+                const prevApp = await applicationRepository.findByIdAndUserId(
+                  classification.applicationId,
+                  account.userId.toString()
+                );
+                const prevStatus = prevApp?.status;
+
+                await applicationRepository.update(
+                  classification.applicationId,
+                  account.userId.toString(),
+                  { status: classification.suggestedStatus as 'Applied' | 'Interview Scheduled' | 'Offer' | 'Rejected' | 'Shortlisted' }
+                );
+                result.statusUpdates++;
+                batchStats.autoUpdated++;
+
+                // Audit log
+                const { ActivityLogModel } = await import('../models');
+                await ActivityLogModel.create({
+                  userId: account.userId,
+                  action: `Auto-updated application status: ${prevStatus ?? 'Unknown'} → ${classification.suggestedStatus}`,
+                  entity: 'Application',
+                  entityId: classification.applicationId,
+                  details: {
+                    previousStatus: prevStatus,
+                    newStatus: classification.suggestedStatus,
+                    sourceEmailMessageId: email.messageId,
+                    confidence: classification.confidence,
+                    processingMethod: classification.processingMethod,
+                  },
+                  level: 'info',
+                });
+
+                // In-app notification
+                await notificationRepository.create({
+                  userId: account.userId.toString(),
+                  title: 'Application status updated',
+                  message: `${classification.summary ?? `Status updated to "${classification.suggestedStatus}"`} — from ${email.from}`,
+                  type: 'application_update',
+                  applicationId: classification.applicationId,
+                });
+
+                // Email notification (non-blocking)
+                void (async () => {
+                  try {
+                    const user = await userRepository.findById(account.userId.toString());
+                    const app = await applicationRepository.findByIdAndUserId(
+                      classification.applicationId!,
+                      account.userId.toString()
                     );
+                    if (user && app && user.preferences?.emailNotifications !== false) {
+                      await sendStatusUpdateEmail(
+                        user.email,
+                        user.firstName,
+                        app.company,
+                        app.jobTitle,
+                        classification.suggestedStatus!,
+                        email.from
+                      );
+                    }
+                  } catch (emailErr) {
+                    logger.warn('Failed to send status update email:', emailErr);
                   }
-                }
-              } catch (emailErr) {
-                logger.warn('Failed to send status update email:', emailErr);
+                })();
+              } catch (err) {
+                logger.warn('Auto-update failed:', err);
+                batchStats.failed++;
               }
-            })();
-
+            } else if (
+              conf >= 0.5 && conf < 0.75 &&           // Medium confidence — suggest
+              classification.applicationId &&
+              classification.suggestedStatus
+            ) {
+              await notificationRepository.create({
+                userId: account.userId.toString(),
+                title: 'Suggested status update available',
+                message: `An email suggests your application status may be "${classification.suggestedStatus}". Review in Email Feed.`,
+                type: 'application_update',
+                applicationId: classification.applicationId,
+              });
+            } else if (
+              conf < 0.5 &&                            // Low confidence — ask user
+              classification.classification !== 'unrelated'
+            ) {
+              await notificationRepository.create({
+                userId: account.userId.toString(),
+                title: 'Email needs review',
+                message: `An email from ${email.from} was classified as "${classification.classification}" with low confidence. Please review in Email Feed.`,
+                type: 'system',
+              });
+            }
           } catch (err) {
-            logger.warn('Failed to auto-update application status:', err);
+            logger.error(`Failed to process email "${email.subject}":`, err);
+            batchStats.failed++;
           }
-        }
-
-        // Notify user for low-confidence classifications needing confirmation
-        if (
-          classification.confidence < 0.7 &&
-          classification.classification !== 'unrelated'
-        ) {
-          await notificationRepository.create({
-            userId: account.userId.toString(),
-            title: `Email needs review`,
-            message: `An email from ${email.from} was classified as "${classification.classification}" with low confidence. Please review.`,
-            type: 'system',
-          });
-        }
+        }));
       }
+
+      logger.info(`Email sync batch complete for ${account.email}: ${JSON.stringify(batchStats)}`);
 
       // Update sync cursor
       await emailRepository.updateSyncCursor(
@@ -224,6 +300,7 @@ export class EmailSyncService {
   ): Promise<
     Array<{
       messageId: string;
+      threadId?: string;
       subject: string;
       from: string;
       receivedAt: Date;
@@ -232,6 +309,7 @@ export class EmailSyncService {
   > {
     const emails: Array<{
       messageId: string;
+      threadId?: string;
       subject: string;
       from: string;
       receivedAt: Date;
@@ -279,6 +357,7 @@ export class EmailSyncService {
 
         emails.push({
           messageId: msgData.id,
+          threadId: msgData.threadId,
           subject,
           from,
           receivedAt: new Date(parseInt(msgData.internalDate, 10)),
@@ -299,6 +378,7 @@ export class EmailSyncService {
   ): Promise<
     Array<{
       messageId: string;
+      threadId?: string;
       subject: string;
       from: string;
       receivedAt: Date;
@@ -307,6 +387,7 @@ export class EmailSyncService {
   > {
     const emails: Array<{
       messageId: string;
+      threadId?: string;
       subject: string;
       from: string;
       receivedAt: Date;

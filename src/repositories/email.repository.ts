@@ -104,14 +104,28 @@ export class EmailRepository {
     emailAccountId: string;
     userId: string;
     messageId: string;
+    threadId?: string;
     subject: string;
     from: string;
     receivedAt: Date;
     snippet: string;
     classification: EmailClassificationType;
+    category?: import('../types').EmailCategory;
     confidence: number;
     applicationId?: string;
     statusUpdate?: string;
+    processingMethod?: import('../types').ProcessingMethod;
+    fallbackReason?: string;
+    recruiterName?: string;
+    recruiterEmail?: string;
+    salaryMin?: number;
+    salaryMax?: number;
+    salaryCurrency?: string;
+    location?: string;
+    requiredAction?: string;
+    summary?: string;
+    importantDates?: Record<string, string>;
+    isPendingReview?: boolean;
   }): Promise<IEmailSyncDocument> {
     return EmailSyncModel.create({
       ...data,

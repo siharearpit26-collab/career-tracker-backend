@@ -1,272 +1,125 @@
+import crypto from 'crypto';
 import { applicationRepository } from '../repositories/application.repository';
-import { EmailClassificationResult, EmailClassificationType } from '../types';
+import { EmailSyncModel } from '../models';
+import { EmailClassificationResult, EmailClassificationType, ProcessingMethod } from '../types';
 import { logger } from '../utils/logger';
+import { aiEmailAnalyzerService } from './aiEmailAnalyzer.service';
 
-// ─── Weighted keyword definitions ───────────────────────────────────────────
-// Each keyword has a weight (1 = normal, 2 = strong signal, 3 = very strong)
+// ─── Stage 1: Pre-Filter ──────────────────────────────────────────────────────
+// Fast synchronous check — runs in <50ms, no AI cost
+
+const JOB_KEYWORDS = [
+  'application', 'interview', 'offer', 'rejection', 'position', 'role',
+  'job', 'career', 'hiring', 'recruiter', 'recruitment', 'talent',
+  'shortlisted', 'selected', 'assessment', 'resume', 'cv', 'candidate',
+  'opportunity', 'vacancy', 'opening', 'placement', 'employment',
+  'congratulations', 'unfortunately', 'background check', 'onboarding',
+  'start date', 'salary', 'compensation', 'offer letter',
+];
+
+const RECRUITMENT_DOMAINS = [
+  'greenhouse.io', 'lever.co', 'workday.com', 'smartrecruiters.com',
+  'ashbyhq.com', 'jobvite.com', 'icims.com', 'taleo.net', 'bamboohr.com',
+  'breezy.hr', 'recruitee.com', 'jazz.co', 'linkedin.com', 'indeed.com',
+  'glassdoor.com', 'naukri.com', 'monster.com', 'ziprecruiter.com',
+  'wellfound.com', 'hired.com', 'angellist.com', 'careers-page.com',
+  'successfactors.com', 'oracle.com', 'workdayjobs.com',
+];
+
+function passesPreFilter(subject: string, from: string, snippet: string): boolean {
+  const text = `${subject} ${snippet}`.toLowerCase();
+  const fromLower = from.toLowerCase();
+
+  // Check known recruitment domains (fast exit)
+  if (RECRUITMENT_DOMAINS.some((d) => fromLower.includes(d))) return true;
+
+  // Check keywords
+  return JOB_KEYWORDS.some((kw) => text.includes(kw));
+}
+
+// ─── Stage 2b: Fallback Rule-Based Classifier ────────────────────────────────
 
 const WEIGHTED_KEYWORDS: Record<EmailClassificationType, Array<[string, number]>> = {
   interview: [
-    // Very strong signals
-    ['interview invitation', 3],
-    ['interview scheduled', 3],
-    ['schedule an interview', 3],
-    ['invite you for an interview', 3],
-    ['invited to interview', 3],
-    ['technical interview', 3],
-    ['phone screen', 3],
-    ['video interview', 3],
-    // Strong signals
-    ['availability for', 2],
-    ['select a time', 2],
-    ['schedule a call', 2],
-    ['calendly', 2],
-    ['zoom link', 2],
-    ['google meet', 2],
-    ['microsoft teams', 2],
-    ['on-site interview', 2],
-    ['panel interview', 2],
-    ['coding interview', 2],
-    ['technical assessment', 2],
-    ['take-home assignment', 2],
-    ['technical round', 2],
-    ['interview process', 2],
-    // Normal signals
-    ['interview', 1],
-    ['availability', 1],
-    ['schedule', 1],
-    ['hr round', 1],
-    ['screening call', 1],
-    ['introductory call', 1],
-    ['next steps', 1],
+    ['interview invitation', 3], ['interview scheduled', 3], ['schedule an interview', 3],
+    ['technical interview', 3], ['phone screen', 3], ['video interview', 3],
+    ['availability for', 2], ['select a time', 2], ['calendly', 2], ['zoom link', 2],
+    ['google meet', 2], ['microsoft teams', 2], ['on-site interview', 2],
+    ['coding interview', 2], ['technical assessment', 2], ['technical round', 2],
+    ['interview', 1], ['availability', 1], ['schedule', 1], ['hr round', 1],
+    ['screening call', 1], ['next steps', 1],
   ],
-
   offer: [
-    // Very strong signals
-    ['offer letter', 3],
-    ['job offer', 3],
-    ['pleased to offer', 3],
-    ['we are offering', 3],
-    ['offer of employment', 3],
-    ['compensation package', 3],
-    ['sign-on bonus', 3],
-    // Strong signals
-    ['congratulations', 2],
-    ['welcome to the team', 2],
-    ['start date', 2],
-    ['salary of', 2],
-    ['annual salary', 2],
-    ['base salary', 2],
-    ['equity', 2],
-    ['stock options', 2],
-    ['benefits package', 2],
-    ['accept the offer', 2],
-    ['background check', 2],
-    // Normal signals
-    ['offer', 1],
-    ['welcome aboard', 1],
-    ['joining us', 1],
-    ['onboarding', 1],
+    ['offer letter', 3], ['job offer', 3], ['pleased to offer', 3],
+    ['offer of employment', 3], ['compensation package', 3], ['sign-on bonus', 3],
+    ['congratulations', 2], ['welcome to the team', 2], ['start date', 2],
+    ['annual salary', 2], ['base salary', 2], ['equity', 2], ['stock options', 2],
+    ['accept the offer', 2], ['background check', 2],
+    ['offer', 1], ['welcome aboard', 1], ['onboarding', 1],
   ],
-
   rejection: [
-    // Very strong signals
-    ['unfortunately', 3],
-    ['not moving forward', 3],
-    ['decided not to proceed', 3],
-    ['will not be moving forward', 3],
-    ['not selected', 3],
-    ['not be continuing', 3],
-    ['other candidates', 3],
-    ['position has been filled', 3],
-    // Strong signals
-    ['regret to inform', 2],
-    ['difficult decision', 2],
-    ['not a match', 2],
-    ['does not meet', 2],
-    ['pursue other candidates', 2],
-    ['wish you the best', 2],
-    ['keep your resume on file', 2],
-    ['future opportunities', 2],
-    ['not the right fit', 2],
-    // Normal signals
-    ['regret', 1],
-    ['declined', 1],
-    ['not successful', 1],
-    ['thank you for your interest', 1],
-    ['appreciate your time', 1],
+    ['unfortunately', 3], ['not moving forward', 3], ['decided not to proceed', 3],
+    ['not selected', 3], ['other candidates', 3], ['position has been filled', 3],
+    ['regret to inform', 2], ['not a match', 2], ['pursue other candidates', 2],
+    ['wish you the best', 2], ['not the right fit', 2],
+    ['regret', 1], ['declined', 1], ['appreciate your time', 1],
   ],
-
   recruitment: [
-    // Very strong signals
-    ['application received', 3],
-    ['thank you for applying', 3],
-    ['we received your application', 3],
-    ['your application has been submitted', 3],
-    ['application confirmation', 3],
-    ['successfully applied', 3],
-    // Strong signals
-    ['shortlisted', 2],
-    ['under review', 2],
-    ['application is being reviewed', 2],
-    ['talent acquisition', 2],
-    ['we are reviewing', 2],
-    ['recruitment team', 2],
-    ['hiring manager', 2],
-    ['job application', 2],
-    ['applied for the position', 2],
-    // Normal signals
-    ['position', 1],
-    ['role', 1],
-    ['hiring', 1],
-    ['recruiter', 1],
-    ['career', 1],
-    ['opportunity', 1],
-    ['we found your profile', 1],
-    ['your background', 1],
-    ['job opening', 1],
+    ['application received', 3], ['thank you for applying', 3],
+    ['we received your application', 3], ['application confirmation', 3],
+    ['shortlisted', 2], ['under review', 2], ['talent acquisition', 2],
+    ['recruitment team', 2], ['hiring manager', 2],
+    ['position', 1], ['role', 1], ['hiring', 1], ['recruiter', 1],
   ],
-
   follow_up: [
-    // Very strong signals
-    ['following up on my application', 3],
-    ['checking in on', 3],
+    ['following up on my application', 3], ['checking in on', 3],
     ['update on my application', 3],
-    ['wanted to follow up', 3],
-    // Strong signals
-    ['following up', 2],
-    ['any updates', 2],
-    ['still interested', 2],
-    ['hear back', 2],
-    ['timeline for', 2],
-    ['status of my application', 2],
-    // Normal signals
-    ['follow up', 1],
-    ['checking in', 1],
-    ['update', 1],
-    ['touch base', 1],
-    ['next steps', 1],
+    ['following up', 2], ['any updates', 2], ['hear back', 2],
+    ['follow up', 1], ['checking in', 1], ['touch base', 1],
   ],
-
   unrelated: [],
 };
 
-// Known recruitment platform domains with high confidence
-const RECRUITMENT_DOMAINS: Record<string, number> = {
-  'greenhouse.io': 3,
-  'lever.co': 3,
-  'workday.com': 3,
-  'smartrecruiters.com': 3,
-  'ashbyhq.com': 3,
-  'jobvite.com': 3,
-  'icims.com': 3,
-  'taleo.net': 3,
-  'bamboohr.com': 3,
-  'breezy.hr': 3,
-  'recruitee.com': 3,
-  'jazz.co': 3,
-  'linkedin.com': 2,
-  'indeed.com': 2,
-  'glassdoor.com': 2,
-  'naukri.com': 2,
-  'monster.com': 2,
-  'ziprecruiter.com': 2,
-  'dice.com': 2,
-  'hired.com': 2,
-  'angellist.com': 2,
-  'wellfound.com': 2,
-  'careers-page.com': 2,
-};
-
-// Common recruitment email subjects
-const SUBJECT_PATTERNS: Array<[RegExp, EmailClassificationType, number]> = [
-  [/your application (for|to)/i, 'recruitment', 2],
-  [/application (received|confirmation|submitted)/i, 'recruitment', 3],
-  [/interview (invitation|request|scheduled|confirmed)/i, 'interview', 3],
-  [/technical (interview|assessment|round|test)/i, 'interview', 3],
-  [/offer (letter|of employment)/i, 'offer', 3],
-  [/congratulations.*offer/i, 'offer', 3],
-  [/unfortunately|regret to inform/i, 'rejection', 3],
-  [/not.*moving forward|not.*selected/i, 'rejection', 3],
-  [/following up|checking in/i, 'follow_up', 2],
-  [/(software|frontend|backend|fullstack|full.stack) engineer/i, 'recruitment', 1],
-  [/(developer|engineer|analyst|designer|manager) (role|position|opportunity)/i, 'recruitment', 1],
-];
-
-function calculateScores(
+function ruleBased(
   subject: string,
   snippet: string,
   from: string
-): Record<EmailClassificationType, number> {
+): { classification: EmailClassificationType; confidence: number } {
   const text = `${subject} ${snippet}`.toLowerCase();
   const fromLower = from.toLowerCase();
 
   const scores: Record<EmailClassificationType, number> = {
-    recruitment: 0,
-    interview: 0,
-    offer: 0,
-    rejection: 0,
-    follow_up: 0,
-    unrelated: 0,
+    recruitment: 0, interview: 0, offer: 0, rejection: 0, follow_up: 0, unrelated: 0,
   };
 
-  // Score from weighted keywords
   for (const [type, keywords] of Object.entries(WEIGHTED_KEYWORDS) as [EmailClassificationType, Array<[string, number]>][]) {
-    for (const [keyword, weight] of keywords) {
-      if (text.includes(keyword)) {
-        scores[type] += weight;
-      }
+    for (const [kw, w] of keywords) {
+      if (text.includes(kw)) scores[type] += w;
     }
   }
 
-  // Score from subject line patterns (subject gets 2x weight)
-  const subjectLower = subject.toLowerCase();
-  for (const [pattern, type, weight] of SUBJECT_PATTERNS) {
-    if (pattern.test(subjectLower)) {
-      scores[type] += weight * 2;
-    }
-  }
+  // Bonus for recruitment domains
+  if (RECRUITMENT_DOMAINS.some((d) => fromLower.includes(d))) scores.recruitment += 3;
 
-  // Score from sender domain
-  for (const [domain, weight] of Object.entries(RECRUITMENT_DOMAINS)) {
-    if (fromLower.includes(domain)) {
-      scores.recruitment += weight;
-    }
-  }
-
-  return scores;
-}
-
-function selectClassification(
-  scores: Record<EmailClassificationType, number>
-): { classification: EmailClassificationType; confidence: number } {
   const entries = Object.entries(scores) as [EmailClassificationType, number][];
-  const total = entries.reduce((sum, [, v]) => sum + v, 0);
+  const total = entries.reduce((s, [, v]) => s + v, 0);
 
-  if (total === 0) {
-    return { classification: 'unrelated', confidence: 0.95 };
-  }
+  if (total === 0) return { classification: 'unrelated', confidence: 0.9 };
 
-  // Sort by score descending
   entries.sort(([, a], [, b]) => b - a);
   const winner = entries[0]![0];
-  const topScore = entries[0]![1];
-  const secondScore = entries[1]?.[1] ?? 0;
+  const top = entries[0]![1];
+  const second = entries[1]?.[1] ?? 0;
 
-  // If top score is very low, it's unrelated
-  if (topScore < 2) {
-    return { classification: 'unrelated', confidence: 0.85 };
-  }
+  if (top < 2) return { classification: 'unrelated', confidence: 0.85 };
 
-  // Confidence = based on dominance of winner
-  const dominance = secondScore > 0 ? topScore / (topScore + secondScore) : 1;
-  const rawConfidence = 0.4 + dominance * 0.5 + Math.min(topScore / 15, 0.1);
-  const confidence = Math.min(0.97, Math.round(rawConfidence * 100) / 100);
+  const dominance = second > 0 ? top / (top + second) : 1;
+  const confidence = Math.min(0.92, 0.4 + dominance * 0.45 + Math.min(top / 15, 0.07));
 
-  return { classification: winner!, confidence };
+  return { classification: winner!, confidence: Math.round(confidence * 100) / 100 };
 }
 
-function mapToStatus(classification: EmailClassificationType): string | undefined {
+function ruleBasedStatus(classification: EmailClassificationType): string | undefined {
   switch (classification) {
     case 'interview': return 'Interview Scheduled';
     case 'offer': return 'Offer';
@@ -276,85 +129,212 @@ function mapToStatus(classification: EmailClassificationType): string | undefine
   }
 }
 
+// ─── Application Matcher ──────────────────────────────────────────────────────
+async function matchToApplication(
+  userId: string,
+  subject: string,
+  snippet: string,
+  from: string,
+  threadId?: string,
+  recruiterEmail?: string,
+  company?: string | null,
+  jobTitle?: string | null
+): Promise<string | null> {
+  try {
+    const { data: apps } = await applicationRepository.findByUserId(
+      userId,
+      { isArchived: false },
+      { page: 1, limit: 100, sortBy: 'appliedDate', sortOrder: 'desc' }
+    );
+
+    if (apps.length === 0) return null;
+
+    // Priority 1: Thread ID match
+    if (threadId) {
+      const threadMatch = await EmailSyncModel.findOne({
+        userId,
+        threadId,
+        applicationId: { $exists: true, $ne: null },
+      }).sort({ receivedAt: -1 });
+
+      if (threadMatch?.applicationId) {
+        const appId = threadMatch.applicationId.toString();
+        if (apps.some((a) => a._id.toString() === appId)) {
+          logger.info(`Matched email via thread ID`);
+          return appId;
+        }
+      }
+    }
+
+    // Priority 2: Recruiter email match
+    if (recruiterEmail) {
+      const re = recruiterEmail.toLowerCase();
+      const recMatch = apps.find((a) =>
+        a.notes?.toLowerCase().includes(re)
+      );
+      if (recMatch) {
+        logger.info(`Matched email via recruiter email`);
+        return recMatch._id.toString();
+      }
+    }
+
+    // Priority 3: AI-extracted company name
+    if (company && company.length > 2) {
+      const compLower = company.toLowerCase();
+      const match = apps.find((a) => a.company.toLowerCase() === compLower);
+      if (match) {
+        logger.info(`Matched email via AI-extracted company: "${company}"`);
+        return match._id.toString();
+      }
+      // Partial match
+      const partial = apps.find((a) => {
+        const ac = a.company.toLowerCase();
+        return ac.includes(compLower) || compLower.includes(ac);
+      });
+      if (partial) {
+        logger.info(`Matched email via partial company name: "${company}"`);
+        return partial._id.toString();
+      }
+    }
+
+    // Priority 4: Text-based company name from email
+    const text = `${subject} ${snippet} ${from}`.toLowerCase();
+    for (const app of apps) {
+      const c = app.company.toLowerCase();
+      if (c.length > 2 && text.includes(c)) {
+        logger.info(`Matched email via text company: "${app.company}"`);
+        return app._id.toString();
+      }
+    }
+
+    // Priority 4b: Sender domain vs company
+    const senderDomain = from.toLowerCase().replace(/.*@/, '').replace(/>.*/, '').split('.')[0] ?? '';
+    if (senderDomain.length > 2) {
+      for (const app of apps) {
+        const c = app.company.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const d = senderDomain.replace(/[^a-z0-9]/g, '');
+        if (d.includes(c) || c.includes(d)) {
+          logger.info(`Matched email via sender domain: "${app.company}"`);
+          return app._id.toString();
+        }
+      }
+    }
+
+    // Priority 5: AI job title + company combo
+    if (jobTitle && jobTitle.length > 3) {
+      const words = jobTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+      for (const app of apps) {
+        const appWords = app.jobTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+        const matches = words.filter((w) => appWords.includes(w));
+        if (matches.length >= 2) {
+          logger.info(`Matched email via job title keywords`);
+          return app._id.toString();
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    logger.warn('Application matching failed:', error);
+    return null;
+  }
+}
+
+// ─── Deduplication key ────────────────────────────────────────────────────────
+export function buildEmailHash(subject: string, from: string): string {
+  return crypto.createHash('sha256').update(`${subject}|${from}`).digest('hex').slice(0, 16);
+}
+
+// ─── Main Classifier ──────────────────────────────────────────────────────────
 export class EmailClassifierService {
   async classify(
     userId: string,
     subject: string,
     snippet: string,
-    from: string
+    from: string,
+    threadId?: string
   ): Promise<EmailClassificationResult> {
-    const scores = calculateScores(subject, snippet, from);
-    const { classification, confidence } = selectClassification(scores);
+    // ── Stage 1: Pre-Filter ──────────────────────────────────────────────────
+    const start = Date.now();
+    const passes = passesPreFilter(subject, from, snippet);
+    const preFilterMs = Date.now() - start;
 
-    if (classification === 'unrelated') {
-      return { classification, confidence };
+    if (preFilterMs > 50) {
+      logger.warn(`Pre-filter took ${preFilterMs}ms (target: 50ms)`);
     }
 
-    // Try to match with an existing application
-    const applicationId = await this.matchToApplication(userId, subject, snippet, from);
-    const suggestedStatus = mapToStatus(classification);
+    if (!passes) {
+      return {
+        classification: 'unrelated',
+        confidence: 0.95,
+        processingMethod: 'pre_filter',
+      };
+    }
 
-    return { classification, confidence, applicationId: applicationId ?? undefined, suggestedStatus };
-  }
+    // ── Stage 2a: AI Analysis ────────────────────────────────────────────────
+    let processingMethod: ProcessingMethod = 'ai';
+    let fallbackReason: string | undefined;
 
-  private async matchToApplication(
-    userId: string,
-    subject: string,
-    snippet: string,
-    from: string
-  ): Promise<string | null> {
-    try {
-      const { data: applications } = await applicationRepository.findByUserId(
-        userId,
-        { isArchived: false },
-        { page: 1, limit: 100, sortBy: 'appliedDate', sortOrder: 'desc' }
+    const aiResult = await aiEmailAnalyzerService.analyze(subject, from, snippet);
+
+    if (aiResult) {
+      const { result: ai, cached } = aiResult;
+
+      // Not job related per AI
+      if (!ai.isJobRelated) {
+        return {
+          classification: 'unrelated',
+          confidence: ai.confidence / 100,
+          processingMethod: 'ai',
+          summary: ai.summary,
+        };
+      }
+
+      // Match to application using AI-extracted data
+      const applicationId = await matchToApplication(
+        userId, subject, snippet, from, threadId,
+        ai.recruiterEmail ?? undefined,
+        ai.company,
+        ai.jobTitle
       );
 
-      if (applications.length === 0) return null;
+      const result = aiEmailAnalyzerService.toClassificationResult(ai, applicationId ?? undefined, 'ai');
 
-      const text = `${subject} ${snippet} ${from}`.toLowerCase();
+      if (cached) logger.info(`Used cached AI result for "${subject.slice(0, 40)}"`);
 
-      // Priority 1: Match by company name (exact or partial)
-      for (const app of applications) {
-        const company = app.company.toLowerCase();
-        if (text.includes(company) && company.length > 2) {
-          logger.info(`Email matched to application via company: "${app.company}"`);
-          return app._id.toString();
-        }
-      }
-
-      // Priority 2: Match by sender domain vs company name
-      const senderDomain = from.toLowerCase().replace(/.*@/, '').replace(/>.*/, '').split('.')[0] ?? '';
-      if (senderDomain.length > 2) {
-        for (const app of applications) {
-          const company = app.company.toLowerCase().replace(/[^a-z0-9]/g, '');
-          const domain = senderDomain.replace(/[^a-z0-9]/g, '');
-          if (domain.includes(company) || company.includes(domain)) {
-            logger.info(`Email matched to application via domain: "${app.company}"`);
-            return app._id.toString();
-          }
-        }
-      }
-
-      // Priority 3: Match by job title keywords (need 2+ significant word matches)
-      for (const app of applications) {
-        const titleWords = app.jobTitle
-          .toLowerCase()
-          .split(/\s+/)
-          .filter((w) => w.length > 3 && !['with', 'that', 'this', 'from', 'have', 'your'].includes(w));
-
-        const matches = titleWords.filter((w) => text.includes(w));
-        if (matches.length >= 2) {
-          logger.info(`Email matched to application via job title: "${app.jobTitle}"`);
-          return app._id.toString();
-        }
-      }
-
-      return null;
-    } catch (error) {
-      logger.warn('Failed to match email to application:', error);
-      return null;
+      return result;
     }
+
+    // ── Stage 2b: Fallback Rule-Based ────────────────────────────────────────
+    fallbackReason = 'AI unavailable or returned invalid response';
+    processingMethod = 'rule_based';
+
+    logger.info(`Using rule-based fallback for "${subject.slice(0, 40)}"`);
+
+    const { classification, confidence } = ruleBased(subject, snippet, from);
+
+    if (classification === 'unrelated') {
+      return {
+        classification: 'unrelated',
+        confidence,
+        processingMethod,
+        fallbackReason,
+      };
+    }
+
+    const applicationId = await matchToApplication(
+      userId, subject, snippet, from, threadId
+    );
+
+    return {
+      classification,
+      confidence,
+      applicationId: applicationId ?? undefined,
+      suggestedStatus: ruleBasedStatus(classification),
+      processingMethod,
+      fallbackReason,
+      isPendingReview: confidence < 0.5,
+    };
   }
 }
 
