@@ -9,6 +9,42 @@ import { logger } from '../utils/logger';
 import { sendStatusUpdateEmail } from '../utils/email.utils';
 import { userRepository } from '../repositories/user.repository';
 
+// Extract company name from sender email/display name
+// e.g. "HR Team <hr@google.com>" → "Google"
+// e.g. "noreply@greenhouse.io" → null (skip platform domains)
+const SKIP_DOMAINS = [
+  'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'live.com',
+  'greenhouse.io', 'lever.co', 'workday.com', 'smartrecruiters.com',
+  'ashbyhq.com', 'jobvite.com', 'icims.com', 'taleo.net', 'bamboohr.com',
+];
+
+function extractCompanyFromSender(from: string): string | null {
+  // Try display name first: "Google Careers <jobs@google.com>"
+  const displayMatch = from.match(/^"?([^"<]+)"?\s*</);
+  if (displayMatch?.[1]) {
+    const name = displayMatch[1].trim()
+      .replace(/\b(careers|jobs|hr|noreply|no-reply|recruiting|talent|team|notifications?|support)\b/gi, '')
+      .replace(/[^a-zA-Z0-9 &.-]/g, '')
+      .trim();
+    if (name.length > 2) return capitalizeWords(name);
+  }
+
+  // Try domain: "hr@google.com" → "Google"
+  const domainMatch = from.match(/@([^.>]+)\./);
+  if (domainMatch?.[1]) {
+    const domain = domainMatch[1].toLowerCase();
+    if (SKIP_DOMAINS.some((d) => d.startsWith(domain))) return null;
+    if (['hr', 'jobs', 'careers', 'noreply', 'mail', 'info', 'hello', 'team'].includes(domain)) return null;
+    return capitalizeWords(domain);
+  }
+
+  return null;
+}
+
+function capitalizeWords(str: string): string {
+  return str.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 interface GmailMessage {
   id: string;
   threadId: string;
@@ -45,6 +81,7 @@ export class EmailSyncService {
       classified: 0,
       matched: 0,
       statusUpdates: 0,
+      autoCreated: 0,
     };
 
     try {
@@ -79,6 +116,7 @@ export class EmailSyncService {
         aiAnalyzed: 0,
         cacheHits: 0,
         matched: 0,
+        autoCreated: 0,
         autoUpdated: 0,
         failed: 0,
       };
@@ -146,25 +184,89 @@ export class EmailSyncService {
               batchStats.matched++;
             }
 
+            // ── Auto-create application if AI found company but no match ──
+            let resolvedApplicationId = classification.applicationId;
+
+            if (
+              !resolvedApplicationId &&
+              classification.classification !== 'unrelated' &&
+              classification.confidence >= 0.6
+            ) {
+              const company = classification.aiCompany ?? extractCompanyFromSender(email.from);
+              const jobTitle = classification.aiJobTitle ?? 'Position';
+
+              if (company && company.length > 1) {
+                try {
+                  const newApp = await applicationRepository.create(
+                    account.userId.toString(),
+                    {
+                      company,
+                      jobTitle,
+                      status: (classification.suggestedStatus as 'Applied' | 'Shortlisted' | 'Interview Scheduled' | 'Offer' | 'Rejected') ?? 'Applied',
+                      source: 'Other',
+                      appliedDate: email.receivedAt.toISOString(),
+                      notes: `Auto-created from email: "${email.subject}"\n\nSender: ${email.from}${classification.summary ? `\n\nSummary: ${classification.summary}` : ''}`,
+                      location: classification.location,
+                      salaryMin: classification.salaryMin,
+                      salaryMax: classification.salaryMax,
+                      salaryCurrency: classification.salaryCurrency,
+                    }
+                  );
+
+                  resolvedApplicationId = newApp._id.toString();
+                  result.matched++;
+                  result.autoCreated = (result.autoCreated ?? 0) + 1;
+                  batchStats.matched++;
+                  batchStats.autoCreated++;
+
+                  logger.info(`Auto-created application for "${company}" from email "${email.subject}"`);
+
+                  // Update sync record with new applicationId
+                  const syncRecord = await emailRepository.findSyncByMessageId(
+                    account._id.toString(), email.messageId
+                  );
+                  if (syncRecord) {
+                    await emailRepository.updateClassification(
+                      syncRecord._id.toString(),
+                      account.userId.toString(),
+                      { applicationId: resolvedApplicationId, isConfirmed: false }
+                    );
+                  }
+
+                  // Notify user
+                  await notificationRepository.create({
+                    userId: account.userId.toString(),
+                    title: `New application auto-created: ${company}`,
+                    message: `An email about a ${jobTitle} position at ${company} was detected and automatically added to your applications.`,
+                    type: 'application_update',
+                    applicationId: resolvedApplicationId,
+                  });
+
+                } catch (createErr) {
+                  logger.warn(`Failed to auto-create application for "${company}":`, createErr);
+                }
+              }
+            }
+
             // ── Confidence-based status update logic ──────────────────────
             const conf = classification.confidence;
 
             if (
               conf >= 0.75 &&                          // High confidence threshold
-              classification.applicationId &&
+              resolvedApplicationId &&
               classification.suggestedStatus &&
               !classification.isPendingReview
             ) {
               // Auto-update
               try {
                 const prevApp = await applicationRepository.findByIdAndUserId(
-                  classification.applicationId,
+                  resolvedApplicationId,
                   account.userId.toString()
                 );
                 const prevStatus = prevApp?.status;
 
                 await applicationRepository.update(
-                  classification.applicationId,
+                  resolvedApplicationId,
                   account.userId.toString(),
                   { status: classification.suggestedStatus as 'Applied' | 'Interview Scheduled' | 'Offer' | 'Rejected' | 'Shortlisted' }
                 );
@@ -177,7 +279,7 @@ export class EmailSyncService {
                   userId: account.userId,
                   action: `Auto-updated application status: ${prevStatus ?? 'Unknown'} → ${classification.suggestedStatus}`,
                   entity: 'Application',
-                  entityId: classification.applicationId,
+                  entityId: resolvedApplicationId,
                   details: {
                     previousStatus: prevStatus,
                     newStatus: classification.suggestedStatus,
@@ -202,7 +304,7 @@ export class EmailSyncService {
                   try {
                     const user = await userRepository.findById(account.userId.toString());
                     const app = await applicationRepository.findByIdAndUserId(
-                      classification.applicationId!,
+                      resolvedApplicationId!,
                       account.userId.toString()
                     );
                     if (user && app && user.preferences?.emailNotifications !== false) {
@@ -224,8 +326,8 @@ export class EmailSyncService {
                 batchStats.failed++;
               }
             } else if (
-              conf >= 0.5 && conf < 0.75 &&           // Medium confidence — suggest
-              classification.applicationId &&
+              conf >= 0.5 && conf < 0.75 &&
+              resolvedApplicationId &&
               classification.suggestedStatus
             ) {
               await notificationRepository.create({
@@ -233,7 +335,7 @@ export class EmailSyncService {
                 title: 'Suggested status update available',
                 message: `An email suggests your application status may be "${classification.suggestedStatus}". Review in Email Feed.`,
                 type: 'application_update',
-                applicationId: classification.applicationId,
+                applicationId: resolvedApplicationId,
               });
             } else if (
               conf < 0.5 &&                            // Low confidence — ask user

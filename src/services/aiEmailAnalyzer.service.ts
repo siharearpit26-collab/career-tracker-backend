@@ -242,6 +242,8 @@ export class AIEmailAnalyzerService {
       summary: ai.summary,
       importantDates: Object.keys(ai.importantDates).length > 0 ? ai.importantDates : undefined,
       isPendingReview,
+      aiCompany: ai.company ?? undefined,
+      aiJobTitle: ai.jobTitle ?? undefined,
     };
   }
 }

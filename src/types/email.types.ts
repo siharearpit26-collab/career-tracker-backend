@@ -95,6 +95,7 @@ export interface EmailSyncResult {
   classified: number;
   matched: number;
   statusUpdates: number;
+  autoCreated?: number;
 }
 
 export interface EmailClassificationResult {
@@ -115,4 +116,7 @@ export interface EmailClassificationResult {
   summary?: string;
   importantDates?: Record<string, string>;
   isPendingReview?: boolean;
+  // AI-extracted fields for auto-create
+  aiCompany?: string;
+  aiJobTitle?: string;
 }
