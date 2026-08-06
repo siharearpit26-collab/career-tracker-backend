@@ -204,7 +204,7 @@ export class EmailSyncService {
                       jobTitle,
                       status: (classification.suggestedStatus as 'Applied' | 'Shortlisted' | 'Interview Scheduled' | 'Offer' | 'Rejected') ?? 'Applied',
                       source: 'Other',
-                      appliedDate: email.receivedAt.toISOString(),
+                      appliedDate: email.receivedAt,
                       notes: `Auto-created from email: "${email.subject}"\n\nSender: ${email.from}${classification.summary ? `\n\nSummary: ${classification.summary}` : ''}`,
                       location: classification.location,
                       salaryMin: classification.salaryMin,
