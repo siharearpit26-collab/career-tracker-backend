@@ -5,3 +5,5 @@ export { classifierService } from './classifier.service';
 export { extractorService } from './extractor.service';
 export { normalizerService } from './normalizer.service';
 export { deduplicatorService, generateJobFingerprint } from './deduplicator.service';
+export { jobLifecycleService } from './jobLifecycle.service';
+export { jobSearchService } from './jobSearch.service';
