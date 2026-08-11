@@ -1,7 +1,6 @@
 import { Types } from 'mongoose';
 import { JobModel, SavedJobModel } from '../models';
 import { IJobDocument, MatchScore, WorkArrangement, EmploymentType } from '../types';
-import { logger } from '../../utils/logger';
 
 export interface JobSearchFilters {
   query?: string;
@@ -245,7 +244,7 @@ export class JobSearchService {
       });
       const savedIds = new Set(savedJobs.map((s) => s.jobId.toString()));
       enrichedJobs = enrichedJobs.map((j) => {
-        (j as Record<string, unknown>)['isSaved'] = savedIds.has(j._id.toString());
+        (j as unknown as Record<string, unknown>)['isSaved'] = savedIds.has(j._id.toString());
         return j;
       });
     }
@@ -261,7 +260,7 @@ export class JobSearchService {
   /**
    * Get personalized recommended jobs.
    */
-  async getRecommended(userId: string, profile: UserProfile, limit = 10): Promise<Array<IJobDocument & { matchScore: MatchScore }>> {
+  async getRecommended(_userId: string, profile: UserProfile, limit = 10): Promise<Array<IJobDocument & { matchScore: MatchScore }>> {
     // Get recent active jobs
     const jobs = await JobModel.find({
       status: { $in: ['active', 'updated'] },
@@ -274,7 +273,7 @@ export class JobSearchService {
     const scored = jobs.map((job) => ({
       ...job.toObject(),
       matchScore: computeMatchScore(job, profile),
-    })) as Array<IJobDocument & { matchScore: MatchScore }>;
+    })) as unknown as Array<IJobDocument & { matchScore: MatchScore }>;
 
     // Return top matches
     scored.sort((a, b) => b.matchScore.total - a.matchScore.total);

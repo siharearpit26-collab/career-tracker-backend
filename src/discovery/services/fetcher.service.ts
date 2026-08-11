@@ -247,7 +247,7 @@ export class FetcherService {
   /**
    * Check if a URL can be fetched right now (rate limit + robots).
    */
-  async canFetch(url: string, domain: string): Promise<boolean> {
+  async canFetch(_url: string, domain: string): Promise<boolean> {
     const source = await sourceRegistryService.getByDomain(domain);
     if (source?.status === 'disabled' || source?.status === 'temporarily_disabled') return false;
 

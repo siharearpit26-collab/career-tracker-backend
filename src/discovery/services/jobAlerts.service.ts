@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 import { JobAlertModel, JobModel } from '../models';
-import { IJobAlertDocument, IJobDocument, MatchScore } from '../types';
+import { IJobAlertDocument, IJobDocument } from '../types';
 import { notificationRepository } from '../../repositories/notification.repository';
 import { sendEmail } from '../../utils/email.utils';
 import { userRepository } from '../../repositories/user.repository';

@@ -1,4 +1,4 @@
-import { ExtractionResult, ExtractionMethod, IJob } from '../types';
+import { ExtractionResult } from '../types';
 import { logger } from '../../utils/logger';
 
 // ─── JSON-LD Extractor (Highest Priority) ─────────────────────────────────────

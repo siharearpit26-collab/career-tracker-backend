@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import { JobModel } from '../models';
-import { IJobDocument } from '../types';
 import { logger } from '../../utils/logger';
 
 export interface DeduplicationResult {
