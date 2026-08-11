@@ -1,6 +1,7 @@
 import { Router, RequestHandler, Request, Response, NextFunction } from 'express';
 import { authenticate, authorize } from '../../middlewares/auth.middleware';
 import { sourceRegistryService } from '../services/sourceRegistry.service';
+import { urlDiscoveryService } from '../services/urlDiscovery.service';
 import { JobModel, JobUrlModel } from '../models';
 
 const router = Router();
@@ -119,6 +120,57 @@ router.get('/metrics', (async (_req: Request, res: Response, next: NextFunction)
           urlsQueued,
         },
       },
+    });
+  } catch (error) { next(error); }
+}) as RequestHandler);
+
+// GET /api/v1/admin/discovery/queues
+router.get('/queues', (async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const stats = await urlDiscoveryService.getStats();
+    res.status(200).json({
+      success: true,
+      message: 'Queue stats retrieved',
+      data: stats,
+    });
+  } catch (error) { next(error); }
+}) as RequestHandler);
+
+// POST /api/v1/admin/discovery/urls — manually submit URLs
+router.post('/urls', (async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { urls } = req.body as { urls: Array<{ url: string; domain: string; sourceId: string; discoveryMethod: string }> };
+
+    if (!urls || !Array.isArray(urls) || urls.length === 0) {
+      res.status(422).json({ success: false, message: 'urls array is required' });
+      return;
+    }
+
+    const result = await urlDiscoveryService.submitBatch(
+      urls.map((u) => ({
+        url: u.url,
+        domain: u.domain,
+        sourceId: u.sourceId,
+        discoveryMethod: (u.discoveryMethod ?? 'manual') as 'manual',
+      }))
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `Submitted ${result.added} new URLs (${result.duplicates} duplicates skipped)`,
+      data: result,
+    });
+  } catch (error) { next(error); }
+}) as RequestHandler);
+
+// POST /api/v1/admin/discovery/retry-failed — retry failed URLs
+router.post('/retry-failed', (async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const count = await urlDiscoveryService.retryFailed();
+    res.status(200).json({
+      success: true,
+      message: `${count} failed URLs requeued for retry`,
+      data: { retriedCount: count },
     });
   } catch (error) { next(error); }
 }) as RequestHandler);
