@@ -141,18 +141,30 @@ router.get('/queues', (async (_req: Request, res: Response, next: NextFunction) 
 // POST /api/v1/admin/discovery/urls — manually submit URLs
 router.post('/urls', (async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { urls } = req.body as { urls: Array<{ url: string; domain: string; sourceId: string; discoveryMethod: string }> };
+    const { urls } = req.body as { urls: Array<{ url: string; domain: string; sourceId?: string; discoveryMethod: string }> };
 
     if (!urls || !Array.isArray(urls) || urls.length === 0) {
       res.status(422).json({ success: false, message: 'urls array is required' });
       return;
     }
 
+    // Auto-register sources for domains that don't have one
+    for (const u of urls) {
+      if (!u.sourceId || u.sourceId === '') {
+        const source = await sourceRegistryService.addSource({
+          domain: u.domain,
+          sourceType: 'website',
+          accessMethod: 'public_page',
+        });
+        u.sourceId = source._id.toString();
+      }
+    }
+
     const result = await urlDiscoveryService.submitBatch(
       urls.map((u) => ({
         url: u.url,
         domain: u.domain,
-        sourceId: u.sourceId,
+        sourceId: u.sourceId!,
         discoveryMethod: (u.discoveryMethod ?? 'manual') as 'manual',
       }))
     );
