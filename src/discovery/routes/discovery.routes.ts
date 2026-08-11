@@ -3,6 +3,7 @@ import { authenticate, authorize } from '../../middlewares/auth.middleware';
 import { sourceRegistryService } from '../services/sourceRegistry.service';
 import { urlDiscoveryService } from '../services/urlDiscovery.service';
 import { pipelineService } from '../services/pipeline.service';
+import { sitemapDiscoveryService } from '../services/sitemapDiscovery.service';
 import { JobModel, JobUrlModel } from '../models';
 
 const router = Router();
@@ -209,6 +210,35 @@ router.post('/alerts/daily', (async (_req: Request, res: Response, next: NextFun
       success: true,
       message: `${count} daily alerts processed`,
       data: { alertsProcessed: count },
+    });
+  } catch (error) { next(error); }
+}) as RequestHandler);
+
+// POST /api/v1/admin/discovery/discover — run sitemap discovery
+router.post('/discover', (async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await sitemapDiscoveryService.runFullDiscovery();
+    res.status(200).json({
+      success: true,
+      message: `Discovery complete: ${result.totalDiscovered} URLs from ${result.sourcesProcessed} sources`,
+      data: result,
+    });
+  } catch (error) { next(error); }
+}) as RequestHandler);
+
+// POST /api/v1/admin/discovery/discover/:sourceId — discover from specific source
+router.post('/discover/:sourceId', (async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const source = await sourceRegistryService.getById(req.params['sourceId']!);
+    if (!source) {
+      res.status(404).json({ success: false, message: 'Source not found' });
+      return;
+    }
+    const result = await sitemapDiscoveryService.discoverFromSitemap(source.domain, source._id.toString());
+    res.status(200).json({
+      success: true,
+      message: `Discovered ${result.discovered} new URLs from ${source.domain}`,
+      data: result,
     });
   } catch (error) { next(error); }
 }) as RequestHandler);

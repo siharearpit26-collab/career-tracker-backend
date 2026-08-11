@@ -9,3 +9,4 @@ export { jobLifecycleService } from './jobLifecycle.service';
 export { jobSearchService } from './jobSearch.service';
 export { jobAlertsService } from './jobAlerts.service';
 export { pipelineService } from './pipeline.service';
+export { sitemapDiscoveryService } from './sitemapDiscovery.service';
