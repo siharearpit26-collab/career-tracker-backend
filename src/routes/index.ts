@@ -10,6 +10,7 @@ import profileRoutes from './profile.routes';
 import setupRoutes from './setup.routes';
 import emailRoutes from './email.routes';
 import calendarRoutes from './calendar.routes';
+import { discoveryAdminRoutes } from '../discovery/routes';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/profile', profileRoutes);
 router.use('/setup', setupRoutes);
 router.use('/email', emailRoutes);
 router.use('/calendar', calendarRoutes);
+router.use('/v1/admin/discovery', discoveryAdminRoutes);
 
 export default router;
