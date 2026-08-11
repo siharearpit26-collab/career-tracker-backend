@@ -2,6 +2,7 @@ import { Router, RequestHandler, Request, Response, NextFunction } from 'express
 import { authenticate, authorize } from '../../middlewares/auth.middleware';
 import { sourceRegistryService } from '../services/sourceRegistry.service';
 import { urlDiscoveryService } from '../services/urlDiscovery.service';
+import { pipelineService } from '../services/pipeline.service';
 import { JobModel, JobUrlModel } from '../models';
 
 const router = Router();
@@ -171,6 +172,43 @@ router.post('/retry-failed', (async (_req: Request, res: Response, next: NextFun
       success: true,
       message: `${count} failed URLs requeued for retry`,
       data: { retriedCount: count },
+    });
+  } catch (error) { next(error); }
+}) as RequestHandler);
+
+// POST /api/v1/admin/discovery/run — trigger pipeline cycle
+router.post('/run', (async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { batchSize = '10' } = req.query as Record<string, string>;
+    const result = await pipelineService.runCycle(parseInt(batchSize, 10));
+    res.status(200).json({
+      success: true,
+      message: 'Pipeline cycle completed',
+      data: result,
+    });
+  } catch (error) { next(error); }
+}) as RequestHandler);
+
+// POST /api/v1/admin/discovery/expire — run expiration check
+router.post('/expire', (async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const expired = await pipelineService.runExpirationCheck();
+    res.status(200).json({
+      success: true,
+      message: `${expired} jobs expired`,
+      data: { expiredCount: expired },
+    });
+  } catch (error) { next(error); }
+}) as RequestHandler);
+
+// POST /api/v1/admin/discovery/alerts/daily — trigger daily alerts
+router.post('/alerts/daily', (async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const count = await pipelineService.runDailyAlerts();
+    res.status(200).json({
+      success: true,
+      message: `${count} daily alerts processed`,
+      data: { alertsProcessed: count },
     });
   } catch (error) { next(error); }
 }) as RequestHandler);

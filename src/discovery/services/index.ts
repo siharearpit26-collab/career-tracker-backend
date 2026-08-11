@@ -7,3 +7,5 @@ export { normalizerService } from './normalizer.service';
 export { deduplicatorService, generateJobFingerprint } from './deduplicator.service';
 export { jobLifecycleService } from './jobLifecycle.service';
 export { jobSearchService } from './jobSearch.service';
+export { jobAlertsService } from './jobAlerts.service';
+export { pipelineService } from './pipeline.service';
