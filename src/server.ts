@@ -17,6 +17,7 @@ const startServer = async (): Promise<void> => {
       logger.info(`Server running on port ${config.app.port}`);
       logger.info(`Environment: ${config.app.nodeEnv}`);
       logger.info(`API Docs: http://localhost:${config.app.port}/api-docs`);
+      logger.info(`Gemini AI: ${config.openai.apiKey ? 'CONFIGURED (' + config.openai.apiKey.length + ' chars)' : 'NOT CONFIGURED'}`);
     });
 
     // Graceful shutdown

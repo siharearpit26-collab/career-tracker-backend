@@ -227,7 +227,9 @@ export class JobSearchService {
     if (profile) {
       enrichedJobs = jobs.map((job) => {
         const matchScore = computeMatchScore(job, profile);
-        return Object.assign(job.toObject(), { matchScore }) as IJobDocument & { matchScore: MatchScore };
+        const obj = job.toJSON() as unknown as Record<string, unknown>;
+        obj['matchScore'] = matchScore;
+        return obj as unknown as IJobDocument & { matchScore: MatchScore };
       });
 
       // Sort by match score if requested
@@ -244,7 +246,9 @@ export class JobSearchService {
       });
       const savedIds = new Set(savedJobs.map((s) => s.jobId.toString()));
       enrichedJobs = enrichedJobs.map((j) => {
-        (j as unknown as Record<string, unknown>)['isSaved'] = savedIds.has(j._id.toString());
+        const jobId = (j as unknown as Record<string, unknown>)['id'] as string
+          ?? (j as unknown as Record<string, unknown>)['_id']?.toString();
+        (j as unknown as Record<string, unknown>)['isSaved'] = savedIds.has(jobId);
         return j;
       });
     }
@@ -287,7 +291,7 @@ export class JobSearchService {
     const job = await JobModel.findById(jobId);
     if (!job) return null;
 
-    const result = job.toObject() as IJobDocument & { matchScore?: MatchScore; isSaved?: boolean };
+    const result = job.toJSON() as unknown as IJobDocument & { matchScore?: MatchScore; isSaved?: boolean };
 
     if (profile) {
       result.matchScore = computeMatchScore(job, profile);

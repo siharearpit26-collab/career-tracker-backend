@@ -19,6 +19,7 @@ export interface IUser {
   passwordResetExpires?: Date;
   refreshTokens: string[];
   preferences: UserPreferences;
+  jobPreferences?: JobPreferences;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +31,16 @@ export interface UserPreferences {
   theme: 'light' | 'dark' | 'system';
   language: string;
   timezone: string;
+}
+
+export interface JobPreferences {
+  preferredRoles: string[];
+  skills: string[];
+  experienceYears?: number;
+  preferredLocations: string[];
+  preferredWorkArrangement: string[];
+  salaryExpectation?: number;
+  salaryCurrency: string;
 }
 
 export interface IUserDocument extends IUser, Document {

@@ -36,10 +36,12 @@ router.get('/search', (async (req: Request, res: Response, next: NextFunction) =
       sortBy: sortBy as JobSearchFilters['sortBy'],
     };
 
-    // Build user profile from user data (simple version)
-    const profile: UserProfile = {
-      // In future: pull from user preferences
-    };
+    // Load user's job preferences for match scoring
+    const { UserModel } = await import('../../models');
+    const user = await UserModel.findById(authReq.userId);
+    const jobPrefs = (user as unknown as Record<string, unknown>)?.['jobPreferences'] as UserProfile | undefined;
+
+    const profile: UserProfile = jobPrefs ?? {};
 
     const result = await jobSearchService.search(filters, authReq.userId, profile);
 

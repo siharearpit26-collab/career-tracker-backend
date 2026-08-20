@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { JobAlertModel, JobModel } from '../models';
 import { IJobAlertDocument, IJobDocument } from '../types';
 import { notificationRepository } from '../../repositories/notification.repository';
-import { sendEmail } from '../../utils/email.utils';
+import { sendEmail, sendNewJobMatchEmail } from '../../utils/email.utils';
 import { userRepository } from '../../repositories/user.repository';
 import { logger } from '../../utils/logger';
 
@@ -150,12 +150,33 @@ export class JobAlertsService {
 
     for (const alert of alerts) {
       if (this.jobMatchesAlert(job, alert)) {
+        // In-app notification
         await notificationRepository.create({
           userId: alert.userId.toString(),
           title: `New match: ${job.title} at ${job.company}`,
           message: `A new job matching your "${alert.name}" alert was just discovered.`,
           type: 'system',
         });
+
+        // Email notification
+        try {
+          const user = await userRepository.findById(alert.userId.toString());
+          if (user && user.preferences?.emailNotifications !== false) {
+            const salary = job.salary?.min && job.salary?.max
+              ? `₹${(job.salary.min / 100000).toFixed(0)}-${(job.salary.max / 100000).toFixed(0)} LPA`
+              : undefined;
+
+            await sendNewJobMatchEmail(user.email, user.firstName, alert.name, {
+              title: job.title,
+              company: job.company,
+              location: job.locations[0]?.city ?? 'India',
+              salary,
+              url: job.applicationUrl ?? job.sourceUrl,
+            });
+          }
+        } catch (emailError) {
+          logger.warn('Failed to send immediate job alert email:', emailError);
+        }
       }
     }
   }

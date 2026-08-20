@@ -10,6 +10,9 @@ router.use(authenticate as RequestHandler);
 router.get('/', profileController.getProfile as RequestHandler);
 router.put('/', profileController.updateProfile as RequestHandler);
 router.patch('/preferences', profileController.updatePreferences as RequestHandler);
+router.get('/job-preferences', profileController.getJobPreferences as RequestHandler);
+router.put('/job-preferences', profileController.updateJobPreferences as RequestHandler);
+router.post('/parse-resume', profileController.parseResume as RequestHandler);
 router.post('/upload-image', uploadSingle('file'), profileController.uploadProfileImage as RequestHandler);
 router.post('/upload-resume', uploadSingle('file'), profileController.uploadResume as RequestHandler);
 

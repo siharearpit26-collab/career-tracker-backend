@@ -96,6 +96,21 @@ const userSchema = new Schema<IUserDocument>(
       type: userPreferencesSchema,
       default: () => ({}),
     },
+    jobPreferences: {
+      type: new Schema(
+        {
+          preferredRoles: { type: [String], default: [] },
+          skills: { type: [String], default: [] },
+          experienceYears: { type: Number },
+          preferredLocations: { type: [String], default: [] },
+          preferredWorkArrangement: { type: [String], default: [] },
+          salaryExpectation: { type: Number },
+          salaryCurrency: { type: String, default: 'INR' },
+        },
+        { _id: false }
+      ),
+      default: () => ({}),
+    },
   },
   {
     timestamps: true,

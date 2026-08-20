@@ -16,12 +16,15 @@ export const startBackgroundWorkers = async (): Promise<void> => {
   try {
     const { createEmailSyncWorker, scheduleRecurringSync } = await import('./emailSync.job');
     const { createReminderWorker, scheduleReminderChecks } = await import('./reminder.job');
+    const { createWeeklyDigestWorker, scheduleWeeklyDigest } = await import('./weeklyDigest.job');
 
     createEmailSyncWorker();
     createReminderWorker();
+    createWeeklyDigestWorker();
 
     await scheduleRecurringSync();
     await scheduleReminderChecks();
+    await scheduleWeeklyDigest();
 
     logger.info('Background workers started successfully');
   } catch (error) {

@@ -87,6 +87,39 @@ export class ProfileService {
 
     await userRepository.deactivate(userId);
   }
+
+  async getJobPreferences(userId: string): Promise<Record<string, unknown>> {
+    const user = await userRepository.findById(userId);
+    if (!user) throw new NotFoundError('User not found');
+    return (user as unknown as Record<string, unknown>)['jobPreferences'] as Record<string, unknown> ?? {};
+  }
+
+  async updateJobPreferences(
+    userId: string,
+    data: {
+      preferredRoles?: string[];
+      skills?: string[];
+      experienceYears?: number;
+      preferredLocations?: string[];
+      preferredWorkArrangement?: string[];
+      salaryExpectation?: number;
+      salaryCurrency?: string;
+    }
+  ): Promise<Record<string, unknown>> {
+    const updateData: Record<string, unknown> = {};
+
+    if (data.preferredRoles !== undefined) updateData['jobPreferences.preferredRoles'] = data.preferredRoles;
+    if (data.skills !== undefined) updateData['jobPreferences.skills'] = data.skills;
+    if (data.experienceYears !== undefined) updateData['jobPreferences.experienceYears'] = data.experienceYears;
+    if (data.preferredLocations !== undefined) updateData['jobPreferences.preferredLocations'] = data.preferredLocations;
+    if (data.preferredWorkArrangement !== undefined) updateData['jobPreferences.preferredWorkArrangement'] = data.preferredWorkArrangement;
+    if (data.salaryExpectation !== undefined) updateData['jobPreferences.salaryExpectation'] = data.salaryExpectation;
+    if (data.salaryCurrency !== undefined) updateData['jobPreferences.salaryCurrency'] = data.salaryCurrency;
+
+    const user = await userRepository.updateRaw(userId, { $set: updateData });
+    if (!user) throw new NotFoundError('User not found');
+    return (user as unknown as Record<string, unknown>)['jobPreferences'] as Record<string, unknown> ?? {};
+  }
 }
 
 export const profileService = new ProfileService();

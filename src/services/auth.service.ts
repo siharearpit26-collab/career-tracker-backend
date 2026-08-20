@@ -3,6 +3,7 @@ import { generateTokenPair, verifyRefreshToken } from '../utils/jwt.utils';
 import {
   sendVerificationEmail,
   sendPasswordResetEmail,
+  sendWelcomeEmail,
 } from '../utils/email.utils';
 import {
   BadRequestError,
@@ -91,6 +92,15 @@ export class AuthService {
       }
     })();
 
+    // Send welcome email in background (non-blocking)
+    void (async () => {
+      try {
+        await sendWelcomeEmail(user.email, user.firstName);
+      } catch (emailError) {
+        logger.warn('Failed to send welcome email:', emailError);
+      }
+    })();
+
     return { user: this.sanitizeUser(user), tokens };
   }
 
@@ -141,24 +151,28 @@ export class AuthService {
   async refreshToken(
     token: string
   ): Promise<{ user: UserResponseDTO; tokens: TokenPair }> {
-    // Verify the refresh token signature
+    if (!token) {
+      throw new UnauthorizedError('Refresh token is required');
+    }
+
+    // Verify the refresh token signature and expiry
     const decoded = verifyRefreshToken(token);
 
-    // Find user and check token exists in DB
+    // Find user with their stored refresh tokens
     const user = await userRepository.findByIdWithTokens(decoded.userId);
     if (!user) {
       throw new UnauthorizedError('User not found');
     }
 
-    const userWithTokens = await userRepository.findByIdWithTokens(
-      decoded.userId
-    );
-    if (!userWithTokens?.refreshTokens?.includes(token)) {
-      throw new UnauthorizedError('Invalid refresh token');
-    }
-
     if (!user.isActive) {
       throw new UnauthorizedError('Your account has been deactivated');
+    }
+
+    // Check the token exists in the user's stored refresh tokens
+    if (!user.refreshTokens?.includes(token)) {
+      // Possible token reuse attack — clear all tokens for safety
+      await userRepository.clearAllRefreshTokens(user._id.toString());
+      throw new UnauthorizedError('Invalid refresh token — please log in again');
     }
 
     // Rotate refresh token — remove old, issue new

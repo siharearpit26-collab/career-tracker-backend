@@ -3,11 +3,11 @@ import { IJobDocument } from '../types';
 
 const jobLocationSchema = new Schema(
   {
-    raw: { type: String, required: true },
+    raw: { type: String },
     city: { type: String },
     state: { type: String },
     country: { type: String },
-    workArrangement: { type: String, enum: ['onsite', 'remote', 'hybrid'], default: 'onsite' },
+    workArrangement: { type: String, enum: ['onsite', 'remote', 'hybrid', 'on-site'], default: 'onsite' },
   },
   { _id: false }
 );
@@ -52,7 +52,7 @@ const jobSchema = new Schema<IJobDocument>(
     },
     seniority: {
       type: String,
-      enum: ['intern', 'junior', 'mid', 'senior', 'staff', 'principal', 'director', 'vp', 'unknown'],
+      enum: ['intern', 'junior', 'mid', 'senior', 'staff', 'principal', 'director', 'vp', 'unknown', 'Intern', 'Junior', 'Mid', 'Senior', 'Staff', 'Principal', 'Director', 'VP'],
       default: 'unknown',
     },
     experienceRange: { type: experienceSchema, default: () => ({}) },
@@ -73,7 +73,7 @@ const jobSchema = new Schema<IJobDocument>(
 
     extractionMethod: {
       type: String,
-      enum: ['json_ld', 'opengraph', 'html_semantic', 'ats_adapter', 'ai_extraction'],
+      enum: ['json_ld', 'opengraph', 'html_semantic', 'ats_adapter', 'ai_extraction', 'structured_data', 'manual'],
       required: true,
     },
     extractionConfidence: { type: Number, default: 0, min: 0, max: 100 },
