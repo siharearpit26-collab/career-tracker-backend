@@ -26,14 +26,56 @@ const RECRUITMENT_DOMAINS = [
   'successfactors.com', 'oracle.com', 'workdayjobs.com',
 ];
 
+// Automated senders whose emails are NEVER real application updates —
+// job alerts, recommendations, connection invitations, digests, marketing
+const BLOCKED_SENDERS = [
+  'jobalerts-noreply@linkedin.com',
+  'jobs-noreply@linkedin.com',
+  'jobs-listings@linkedin.com',
+  'invitations@linkedin.com',
+  'notifications-noreply@linkedin.com',
+  'messaging-digest-noreply@linkedin.com',
+  'news@linkedin.com',
+  'updates@linkedin.com',
+  'recommendationnc@naukri.com',
+  'alerts@naukri.com',
+  'infoedge@naukri.com',
+  'noreply@indeed.com',
+  'alert@indeed.com',
+  'donotreply@indeed.com',
+];
+
+// Subject/snippet patterns that indicate a job alert or notification, not an application update
+const ALERT_PATTERNS = [
+  /jobs? (for you|matching|recommended|alert)/i,
+  /\d+\+? (new )?jobs?/i,           // "25 new jobs", "10+ jobs"
+  /new jobs? (posted|available|for)/i,
+  /recommended (for you|jobs)/i,
+  /wants to connect/i,
+  /invitation to connect/i,
+  /viewed your profile/i,
+  /people you may know/i,
+  /your (weekly|daily) (job|digest)/i,
+  /job alert/i,
+  /apply now/i,
+  /trending/i,
+  /top companies hiring/i,
+];
+
 function passesPreFilter(subject: string, from: string, snippet: string): boolean {
   const text = `${subject} ${snippet}`.toLowerCase();
   const fromLower = from.toLowerCase();
 
-  // Check known recruitment domains (fast exit)
+  // 1. Hard block: automated notification/alert senders
+  if (BLOCKED_SENDERS.some((s) => fromLower.includes(s))) return false;
+
+  // 2. Hard block: subject/snippet looks like a job alert or social notification
+  if (ALERT_PATTERNS.some((p) => p.test(subject) || p.test(snippet))) return false;
+
+  // 3. Check known recruitment domains (fast pass)
   if (RECRUITMENT_DOMAINS.some((d) => fromLower.includes(d))) return true;
 
-  // Check keywords
+  // 4. Check keywords
   return JOB_KEYWORDS.some((kw) => text.includes(kw));
 }
 

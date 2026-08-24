@@ -134,7 +134,11 @@ Rules:
 - NEVER hallucinate company names, job titles, or dates not present in the email
 - Return null for any field not clearly present in the email
 - confidence reflects how certain you are about the classification (100 = absolutely certain)
-- isJobRelated = false for newsletters, promotions, account alerts, and non-recruitment emails
+- isJobRelated = false for: job alerts/recommendations (e.g. "25 new jobs for you"), LinkedIn connection invitations, "someone viewed your profile", newsletters, promotions, digests, account alerts, and marketing emails
+- isJobRelated = true ONLY for emails about a SPECIFIC application the person actually submitted: application confirmations, interview invites, assessments, offers, rejections from a company the user applied to
+- A job alert listing multiple jobs is NOT a job application — set isJobRelated = false
+- Set status to null unless the email clearly indicates a status change for a specific application the user submitted
+- For job alerts, recommendations, and invitations, set confidence low (below 40) and status to null
 - Return ONLY the JSON object, no markdown, no explanation`;
 
 export class AIEmailAnalyzerService {

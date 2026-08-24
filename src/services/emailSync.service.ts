@@ -9,42 +9,6 @@ import { logger } from '../utils/logger';
 import { sendStatusUpdateEmail } from '../utils/email.utils';
 import { userRepository } from '../repositories/user.repository';
 
-// Extract company name from sender email/display name
-// e.g. "HR Team <hr@google.com>" → "Google"
-// e.g. "noreply@greenhouse.io" → null (skip platform domains)
-const SKIP_DOMAINS = [
-  'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'live.com',
-  'greenhouse.io', 'lever.co', 'workday.com', 'smartrecruiters.com',
-  'ashbyhq.com', 'jobvite.com', 'icims.com', 'taleo.net', 'bamboohr.com',
-];
-
-function extractCompanyFromSender(from: string): string | null {
-  // Try display name first: "Google Careers <jobs@google.com>"
-  const displayMatch = from.match(/^"?([^"<]+)"?\s*</);
-  if (displayMatch?.[1]) {
-    const name = displayMatch[1].trim()
-      .replace(/\b(careers|jobs|hr|noreply|no-reply|recruiting|talent|team|notifications?|support)\b/gi, '')
-      .replace(/[^a-zA-Z0-9 &.-]/g, '')
-      .trim();
-    if (name.length > 2) return capitalizeWords(name);
-  }
-
-  // Try domain: "hr@google.com" → "Google"
-  const domainMatch = from.match(/@([^.>]+)\./);
-  if (domainMatch?.[1]) {
-    const domain = domainMatch[1].toLowerCase();
-    if (SKIP_DOMAINS.some((d) => d.startsWith(domain))) return null;
-    if (['hr', 'jobs', 'careers', 'noreply', 'mail', 'info', 'hello', 'team'].includes(domain)) return null;
-    return capitalizeWords(domain);
-  }
-
-  return null;
-}
-
-function capitalizeWords(str: string): string {
-  return str.replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 interface GmailMessage {
   id: string;
   threadId: string;
@@ -187,13 +151,23 @@ export class EmailSyncService {
             // ── Auto-create application if AI found company but no match ──
             let resolvedApplicationId = classification.applicationId;
 
-            if (
+            // Only auto-create when AI CONFIDENTLY extracted a real company AND job title.
+            // Do NOT fall back to sender-domain guessing (avoids "Naukri Campus", "LinkedIn" junk).
+            const isRealApplicationEmail =
               !resolvedApplicationId &&
               classification.classification !== 'unrelated' &&
-              classification.confidence >= 0.6
-            ) {
-              const company = classification.aiCompany ?? extractCompanyFromSender(email.from);
-              const jobTitle = classification.aiJobTitle ?? 'Position';
+              classification.confidence >= 0.75 &&
+              !!classification.aiCompany &&
+              classification.aiCompany.length > 2 &&
+              !!classification.aiJobTitle &&
+              classification.aiJobTitle.length > 2 &&
+              // Reject known job-board/platform "company" names
+              !['linkedin', 'naukri', 'indeed', 'glassdoor', 'monster', 'shine', 'foundit', 'campus']
+                .some((p) => classification.aiCompany!.toLowerCase().includes(p));
+
+            if (isRealApplicationEmail) {
+              const company = classification.aiCompany!;
+              const jobTitle = classification.aiJobTitle!;
 
               if (company && company.length > 1) {
                 try {
