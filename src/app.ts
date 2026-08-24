@@ -16,6 +16,9 @@ import apiRoutes from './routes';
 
 const app: Application = express();
 
+// Trust the first proxy (Render, Netlify, etc.) so rate limiting reads the real client IP
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 
