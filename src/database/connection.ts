@@ -22,10 +22,11 @@ export const connectDatabase = async (): Promise<void> => {
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
       family: 4, // Use IPv4, avoids IPv6 issues on Windows
+      dbName: 'careertracker', // Force correct database regardless of URI path
     });
 
     isConnected = true;
-    logger.info(`MongoDB connected: ${connection.connection.host}`);
+    logger.info(`MongoDB connected: ${connection.connection.host} (db: ${connection.connection.name})`);
 
     mongoose.connection.on('error', (error: Error) => {
       logger.error('MongoDB connection error:', error);
