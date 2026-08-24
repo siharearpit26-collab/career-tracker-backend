@@ -1,13 +1,20 @@
 import multer, { FileFilterCallback } from 'multer';
 import path from 'path';
+import fs from 'fs';
 import { Request } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { BadRequestError } from '../utils/errors';
 
+// Ensure the uploads directory exists (Render's filesystem starts empty)
+const UPLOAD_DIR = 'uploads';
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
 const storage = multer.diskStorage({
   destination: (_req: Request, _file: Express.Multer.File, cb) => {
-    cb(null, 'uploads/');
+    cb(null, `${UPLOAD_DIR}/`);
   },
   filename: (_req: Request, file: Express.Multer.File, cb) => {
     const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`;
