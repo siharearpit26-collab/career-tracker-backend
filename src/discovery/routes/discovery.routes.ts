@@ -1,10 +1,12 @@
 import { Router, RequestHandler, Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
+import { Types } from 'mongoose';
 import { authenticate, authorize } from '../../middlewares/auth.middleware';
 import { sourceRegistryService } from '../services/sourceRegistry.service';
 import { urlDiscoveryService } from '../services/urlDiscovery.service';
 import { pipelineService } from '../services/pipeline.service';
 import { sitemapDiscoveryService } from '../services/sitemapDiscovery.service';
-import { JobModel, JobUrlModel } from '../models';
+import { JobModel, JobUrlModel, JobSourceModel } from '../models';
 
 const router = Router();
 
@@ -90,6 +92,97 @@ router.delete('/sources/:id', (async (req: Request, res: Response, next: NextFun
       return;
     }
     res.status(200).json({ success: true, message: 'Source disabled', data: source });
+  } catch (error) { next(error); }
+}) as RequestHandler);
+
+// ─── Manual Job Creation ────────────────────────────────────────────────────
+
+// POST /api/v1/admin/discovery/jobs — add a job manually
+router.post('/jobs', (async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const {
+      title, company, location, description, applicationUrl,
+      employmentType, seniority, experienceMin, experienceMax,
+      salaryMin, salaryMax, salaryCurrency, skills, workArrangement,
+    } = req.body as {
+      title: string; company: string; location: string; description: string;
+      applicationUrl: string; employmentType?: string; seniority?: string;
+      experienceMin?: number; experienceMax?: number; salaryMin?: number;
+      salaryMax?: number; salaryCurrency?: string; skills?: string[];
+      workArrangement?: string;
+    };
+
+    if (!title || !company || !applicationUrl) {
+      res.status(422).json({ success: false, message: 'title, company, and applicationUrl are required' });
+      return;
+    }
+
+    // Ensure a manual source exists
+    let source = await JobSourceModel.findOne({ domain: 'manual-entry' });
+    if (!source) {
+      source = await JobSourceModel.create({
+        domain: 'manual-entry',
+        sourceType: 'website',
+        accessMethod: 'public_page',
+        status: 'active',
+        qualityScore: 100,
+        complianceNotes: 'Manually added by admin',
+      });
+    }
+
+    const companyNormalized = company.toLowerCase().trim();
+    const city = location || 'India';
+    const skillsArr = Array.isArray(skills) ? skills : [];
+    const now = new Date();
+
+    const fingerprint = crypto
+      .createHash('sha256')
+      .update(`${companyNormalized}|${title.toLowerCase()}|${city.toLowerCase()}`)
+      .digest('hex');
+
+    // Check for duplicate
+    const existing = await JobModel.findOne({ jobFingerprint: fingerprint });
+    if (existing) {
+      res.status(409).json({ success: false, message: 'A job with the same title, company, and location already exists' });
+      return;
+    }
+
+    const job = await JobModel.create({
+      sourceId: source._id as Types.ObjectId,
+      sourceUrl: applicationUrl,
+      applicationUrl,
+      jobFingerprint: fingerprint,
+      rawTitle: title,
+      rawCompany: company,
+      rawLocation: location,
+      rawDescription: description,
+      title,
+      company,
+      companyNormalized,
+      description: (description ?? '').slice(0, 10000),
+      locations: [{ raw: location, city, country: 'India', workArrangement: workArrangement ?? 'on-site' }],
+      employmentType: employmentType ?? 'FULL_TIME',
+      seniority: seniority ?? 'mid',
+      experienceRange: { min: experienceMin, max: experienceMax },
+      salary: (salaryMin || salaryMax)
+        ? { min: salaryMin, max: salaryMax, currency: salaryCurrency ?? 'INR', period: 'annual' }
+        : {},
+      skills: skillsArr,
+      skillsNormalized: skillsArr.map((s) => s.toLowerCase()),
+      status: 'active',
+      firstSeenAt: now,
+      lastSeenAt: now,
+      lastVerifiedAt: now,
+      sourcePostedAt: now,
+      extractionMethod: 'manual',
+      extractionConfidence: 100,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Job added successfully',
+      data: job,
+    });
   } catch (error) { next(error); }
 }) as RequestHandler);
 
