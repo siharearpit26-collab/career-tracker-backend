@@ -238,6 +238,33 @@ router.post('/discover', (async (_req: Request, res: Response, next: NextFunctio
   } catch (error) { next(error); }
 }) as RequestHandler);
 
+// POST /api/v1/admin/discovery/adzuna-sync — fetch real jobs from Adzuna API
+router.post('/adzuna-sync', (async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { adzunaSyncService } = await import('../services/adzunaSync.service');
+    const { queries } = req.body as { queries?: Array<{ what: string; where?: string }> };
+
+    // Default queries covering common tech roles across major Indian cities
+    const defaultQueries = [
+      { what: 'python developer', where: 'india' },
+      { what: 'software engineer', where: 'bengaluru' },
+      { what: 'full stack developer', where: 'india' },
+      { what: 'backend developer', where: 'india' },
+      { what: 'frontend developer', where: 'india' },
+      { what: 'react developer', where: 'india' },
+      { what: 'django developer', where: 'india' },
+      { what: 'fresher software', where: 'india' },
+    ];
+
+    const result = await adzunaSyncService.syncJobs(queries ?? defaultQueries);
+    res.status(200).json({
+      success: true,
+      message: `Adzuna sync: ${result.added} new jobs added, ${result.updated} updated`,
+      data: result,
+    });
+  } catch (error) { next(error); }
+}) as RequestHandler);
+
 // POST /api/v1/admin/discovery/discover/:sourceId — discover from specific source
 router.post('/discover/:sourceId', (async (req: Request, res: Response, next: NextFunction) => {
   try {
