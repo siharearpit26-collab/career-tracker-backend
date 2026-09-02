@@ -1,5 +1,4 @@
 import fs from 'fs';
-import path from 'path';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -65,7 +64,10 @@ export class ResumeParserService {
   }
 
   private async extractTextFromPdf(filePath: string): Promise<string> {
-    const absolutePath = path.resolve(filePath);
+    // Support both absolute and relative paths
+    const absolutePath = require('path').isAbsolute(filePath)
+      ? filePath
+      : require('path').resolve(process.cwd(), filePath);
 
     if (!fs.existsSync(absolutePath)) {
       throw new Error(`File not found: ${absolutePath}`);
@@ -82,7 +84,7 @@ export class ResumeParserService {
     const genAI = new GoogleGenerativeAI(config.openai.apiKey);
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3.6-flash',
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0,

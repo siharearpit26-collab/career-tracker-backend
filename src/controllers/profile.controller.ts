@@ -248,9 +248,10 @@ export class ProfileController {
       }
 
       const filePath = user.resumeUrl.replace(/^\//, '');
-      logger.info(`Parsing resume: ${filePath}`);
+      const absoluteFilePath = require('path').resolve(process.cwd(), filePath);
+      logger.info(`Parsing resume: ${absoluteFilePath}`);
 
-      const parsedResume = await resumeParserService.parseResume(filePath);
+      const parsedResume = await resumeParserService.parseResume(absoluteFilePath);
 
       if (!parsedResume) {
         res.status(500).json({ success: false, message: 'AI parsing failed. Please try again later.' });
