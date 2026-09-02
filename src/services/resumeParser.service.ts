@@ -82,7 +82,7 @@ export class ResumeParserService {
     const genAI = new GoogleGenerativeAI(config.openai.apiKey);
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.0-flash',
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0,
