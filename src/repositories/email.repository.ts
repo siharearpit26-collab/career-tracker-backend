@@ -96,7 +96,7 @@ export class EmailRepository {
   }
 
   async findAllActiveAccounts(): Promise<IEmailAccountDocument[]> {
-    return EmailAccountModel.find({ isActive: true });
+    return EmailAccountModel.find({ isActive: true }).select('+accessToken +refreshToken');
   }
 
   // Email Sync operations

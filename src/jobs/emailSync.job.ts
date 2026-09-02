@@ -54,7 +54,7 @@ export const createEmailSyncWorker = (): Worker<EmailSyncJobData> => {
 
       switch (job.data.type) {
         case 'sync-account': {
-          const account = await emailRepository.findAccountById(job.data.accountId);
+          const account = await emailRepository.findAccountByIdWithTokens(job.data.accountId);
           if (account && account.isActive) {
             const result = await emailSyncService.syncAccount(account);
             logger.info(

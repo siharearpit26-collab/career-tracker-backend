@@ -60,17 +60,36 @@ export class EmailSyncService {
 
       let accessToken = accountWithTokens.accessToken;
 
-      if (new Date() >= accountWithTokens.tokenExpiresAt) {
+      // Refresh if expired or within 5-minute buffer (handles clock skew)
+      const fiveMinutes = 5 * 60 * 1000;
+      if (new Date().getTime() >= accountWithTokens.tokenExpiresAt.getTime() - fiveMinutes) {
         accessToken = await this.refreshToken(accountWithTokens);
       }
 
-      const decryptedToken = decrypt(accessToken);
+      let decryptedToken = decrypt(accessToken);
 
-      // Fetch emails based on provider
-      const emails =
-        account.provider === 'gmail'
-          ? await this.fetchGmailEmails(decryptedToken, account.syncCursor)
-          : await this.fetchOutlookEmails(decryptedToken, account.lastSyncedAt);
+      // Fetch emails based on provider — retry once with a fresh token on 401
+      let emails;
+      try {
+        emails =
+          account.provider === 'gmail'
+            ? await this.fetchGmailEmails(decryptedToken, account.syncCursor)
+            : await this.fetchOutlookEmails(decryptedToken, account.lastSyncedAt);
+      } catch (fetchErr) {
+        const msg = fetchErr instanceof Error ? fetchErr.message : '';
+        if (msg.includes('401') || msg.includes('403')) {
+          // Token rejected — force a refresh and retry once
+          logger.warn(`Token rejected for ${account.email}, forcing refresh and retrying...`);
+          accessToken = await this.refreshToken(accountWithTokens);
+          decryptedToken = decrypt(accessToken);
+          emails =
+            account.provider === 'gmail'
+              ? await this.fetchGmailEmails(decryptedToken, account.syncCursor)
+              : await this.fetchOutlookEmails(decryptedToken, account.lastSyncedAt);
+        } else {
+          throw fetchErr;
+        }
+      }
 
       // Process each email in batches of 20 concurrently
       const BATCH_SIZE = 20;

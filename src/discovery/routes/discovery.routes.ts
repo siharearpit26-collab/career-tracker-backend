@@ -337,16 +337,51 @@ router.post('/adzuna-sync', (async (req: Request, res: Response, next: NextFunct
     const { adzunaSyncService } = await import('../services/adzunaSync.service');
     const { queries } = req.body as { queries?: Array<{ what: string; where?: string }> };
 
-    // Default queries covering common tech roles across major Indian cities
+    // Default queries covering roles across all major professions in India
     const defaultQueries = [
-      { what: 'python developer', where: 'india' },
-      { what: 'software engineer', where: 'bengaluru' },
+      // Technology
+      { what: 'software engineer', where: 'india' },
       { what: 'full stack developer', where: 'india' },
       { what: 'backend developer', where: 'india' },
       { what: 'frontend developer', where: 'india' },
+      { what: 'python developer', where: 'india' },
       { what: 'react developer', where: 'india' },
-      { what: 'django developer', where: 'india' },
-      { what: 'fresher software', where: 'india' },
+      { what: 'devops engineer', where: 'india' },
+      { what: 'cloud engineer', where: 'india' },
+      // Data & Analytics
+      { what: 'data analyst', where: 'india' },
+      { what: 'data scientist', where: 'india' },
+      { what: 'business analyst', where: 'india' },
+      { what: 'data engineer', where: 'india' },
+      { what: 'machine learning engineer', where: 'india' },
+      { what: 'power bi analyst', where: 'india' },
+      // Operations & Management
+      { what: 'operations analyst', where: 'india' },
+      { what: 'operations manager', where: 'india' },
+      { what: 'project manager', where: 'india' },
+      { what: 'product manager', where: 'india' },
+      { what: 'supply chain analyst', where: 'india' },
+      // Finance & Accounting
+      { what: 'financial analyst', where: 'india' },
+      { what: 'chartered accountant', where: 'india' },
+      { what: 'investment analyst', where: 'india' },
+      { what: 'accounts manager', where: 'india' },
+      // Marketing & Sales
+      { what: 'digital marketing', where: 'india' },
+      { what: 'marketing analyst', where: 'india' },
+      { what: 'sales manager', where: 'india' },
+      { what: 'growth manager', where: 'india' },
+      // Design & Content
+      { what: 'ui ux designer', where: 'india' },
+      { what: 'graphic designer', where: 'india' },
+      { what: 'content writer', where: 'india' },
+      // HR & Admin
+      { what: 'human resources manager', where: 'india' },
+      { what: 'talent acquisition', where: 'india' },
+      // Fresher / Entry level
+      { what: 'fresher engineer', where: 'india' },
+      { what: 'fresher analyst', where: 'india' },
+      { what: 'management trainee', where: 'india' },
     ];
 
     const result = await adzunaSyncService.syncJobs(queries ?? defaultQueries);

@@ -3,6 +3,7 @@ import { Seniority, JobLocation, WorkArrangement } from '../types';
 // ─── Title Normalization ──────────────────────────────────────────────────────
 
 const TITLE_MAPPINGS: Array<[RegExp, string]> = [
+  // Software Engineering abbreviations
   [/\bSDE[-\s]?[1I]\b/gi, 'Software Engineer'],
   [/\bSDE[-\s]?2\b/gi, 'Senior Software Engineer'],
   [/\bSDE[-\s]?3\b/gi, 'Staff Software Engineer'],
@@ -21,6 +22,26 @@ const TITLE_MAPPINGS: Array<[RegExp, string]> = [
   [/\bML\s*Engineer\b/gi, 'Machine Learning Engineer'],
   [/\bAI\s*Engineer\b/gi, 'AI Engineer'],
   [/\bQA\s*Engineer\b/gi, 'QA Engineer'],
+  // Data & Analytics abbreviations
+  [/\bDA\b(?=\s|$)/g, 'Data Analyst'],
+  [/\bDS\b(?=\s|$)/g, 'Data Scientist'],
+  [/\bDE\b(?=\s|$)/g, 'Data Engineer'],
+  [/\bBA\b(?=\s|$)/g, 'Business Analyst'],
+  [/\bBI\s*(Analyst|Developer|Engineer)\b/gi, 'Business Intelligence $1'],
+  // Finance abbreviations
+  [/\bCA\b(?=\s|$)/g, 'Chartered Accountant'],
+  [/\bCFO\b/gi, 'Chief Financial Officer'],
+  [/\bFP&A\b/gi, 'Financial Planning & Analysis'],
+  // HR abbreviations
+  [/\bTA\b(?=\s|$)/g, 'Talent Acquisition'],
+  [/\bHRBP\b/gi, 'HR Business Partner'],
+  [/\bHRIS\b/gi, 'HR Information Systems'],
+  // Operations abbreviations
+  [/\bOps\b/gi, 'Operations'],
+  [/\bSCM\b/gi, 'Supply Chain Management'],
+  [/\bPM\b(?=\s|$)/g, 'Project Manager'],
+  [/\bPO\b(?=\s|$)/g, 'Product Owner'],
+  // General seniority prefixes
   [/\bSr\.?\s*/gi, 'Senior '],
   [/\bJr\.?\s*/gi, 'Junior '],
 ];
@@ -137,13 +158,76 @@ const SKILLS_DICTIONARY: Record<string, string> = {
   'ai': 'AI', 'artificial intelligence': 'AI',
   'llm': 'LLM', 'generative ai': 'Generative AI',
 
-  // Data
+  // Data Engineering & Analytics
   'data structures': 'Data Structures', 'algorithms': 'Algorithms',
   'dsa': 'Data Structures & Algorithms',
   'data engineering': 'Data Engineering', 'etl': 'ETL',
   'apache spark': 'Apache Spark', 'spark': 'Apache Spark',
   'kafka': 'Apache Kafka', 'apache kafka': 'Apache Kafka',
   'hadoop': 'Hadoop', 'airflow': 'Apache Airflow',
+  'tableau': 'Tableau', 'power bi': 'Power BI', 'powerbi': 'Power BI',
+  'looker': 'Looker', 'qlik': 'QlikView', 'metabase': 'Metabase',
+  'excel': 'Excel', 'microsoft excel': 'Excel', 'advanced excel': 'Excel',
+  'google sheets': 'Google Sheets', 'google analytics': 'Google Analytics',
+  'data visualization': 'Data Visualization', 'data analysis': 'Data Analysis',
+  'statistical analysis': 'Statistical Analysis', 'statistics': 'Statistics',
+  'data warehousing': 'Data Warehousing', 'snowflake': 'Snowflake',
+  'bigquery': 'BigQuery', 'redshift': 'Redshift', 'databricks': 'Databricks',
+
+  // Finance & Accounting
+  'financial modeling': 'Financial Modeling', 'financial analysis': 'Financial Analysis',
+  'valuation': 'Valuation', 'dcf': 'DCF', 'discounted cash flow': 'DCF',
+  'tally': 'Tally', 'sap': 'SAP', 'sap fi': 'SAP FI', 'sap fico': 'SAP FICO',
+  'quickbooks': 'QuickBooks', 'zoho books': 'Zoho Books',
+  'accounting': 'Accounting', 'bookkeeping': 'Bookkeeping',
+  'gst': 'GST', 'tds': 'TDS', 'income tax': 'Income Tax',
+  'risk management': 'Risk Management', 'compliance': 'Compliance',
+  'ms excel': 'Excel', 'pivot tables': 'Pivot Tables',
+  'investment banking': 'Investment Banking', 'equity research': 'Equity Research',
+
+  // Operations & Supply Chain
+  'supply chain': 'Supply Chain', 'supply chain management': 'Supply Chain Management',
+  'logistics': 'Logistics', 'procurement': 'Procurement', 'sourcing': 'Sourcing',
+  'inventory management': 'Inventory Management', 'warehouse management': 'Warehouse Management',
+  'erp': 'ERP', 'sap mm': 'SAP MM', 'sap sd': 'SAP SD',
+  'six sigma': 'Six Sigma', 'lean': 'Lean', 'kaizen': 'Kaizen',
+  'process improvement': 'Process Improvement', 'operations management': 'Operations Management',
+  'vendor management': 'Vendor Management',
+
+  // Marketing & Sales
+  'digital marketing': 'Digital Marketing', 'seo': 'SEO', 'sem': 'SEM',
+  'ppc': 'PPC', 'google ads': 'Google Ads', 'facebook ads': 'Facebook Ads',
+  'social media marketing': 'Social Media Marketing', 'content marketing': 'Content Marketing',
+  'email marketing': 'Email Marketing', 'crm': 'CRM',
+  'salesforce': 'Salesforce', 'hubspot': 'HubSpot', 'zoho crm': 'Zoho CRM',
+  'market research': 'Market Research', 'brand management': 'Brand Management',
+  'copywriting': 'Copywriting', 'content writing': 'Content Writing',
+  'b2b sales': 'B2B Sales', 'b2c sales': 'B2C Sales',
+  'cold calling': 'Cold Calling', 'lead generation': 'Lead Generation',
+
+  // HR & Talent
+  'recruitment': 'Recruitment', 'talent acquisition': 'Talent Acquisition',
+  'hr': 'HR', 'human resources': 'HR',
+  'payroll': 'Payroll', 'onboarding': 'Onboarding',
+  'performance management': 'Performance Management',
+  'employee relations': 'Employee Relations', 'hris': 'HRIS',
+  'workday': 'Workday', 'darwinbox': 'Darwinbox', 'greythr': 'greytHR',
+
+  // Design
+  'ui design': 'UI Design', 'ux design': 'UX Design',
+  'user research': 'User Research', 'wireframing': 'Wireframing',
+  'prototyping': 'Prototyping', 'adobe xd': 'Adobe XD',
+  'photoshop': 'Photoshop', 'illustrator': 'Illustrator',
+  'after effects': 'After Effects', 'premiere pro': 'Premiere Pro',
+  'canva': 'Canva', 'indesign': 'InDesign',
+
+  // Project & Product Management
+  'project management': 'Project Management', 'product management': 'Product Management',
+  'pmp': 'PMP', 'prince2': 'PRINCE2',
+  'roadmap': 'Roadmapping', 'stakeholder management': 'Stakeholder Management',
+  'trello': 'Trello', 'asana': 'Asana', 'notion': 'Notion',
+  'product roadmap': 'Product Roadmap', 'user stories': 'User Stories',
+  'okrs': 'OKRs', 'kpis': 'KPIs',
 };
 
 function normalizeSkill(skill: string): string {
