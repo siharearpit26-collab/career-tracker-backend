@@ -391,7 +391,7 @@ export class EmailSyncService {
 
   private async fetchGmailEmails(
     accessToken: string,
-    _syncCursor?: string
+    syncCursor?: string
   ): Promise<
     Array<{
       messageId: string;
@@ -412,14 +412,20 @@ export class EmailSyncService {
     }> = [];
 
     try {
-      // Fetch recent messages (last 30 days)
-      const after = Math.floor(
-        (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000
-      );
-      const query = `after:${after}`;
+      // If we have a cursor (ISO timestamp from last sync), fetch only newer emails.
+      // Otherwise fall back to last 90 days for the first-ever sync.
+      let query: string;
+      if (syncCursor) {
+        const cursorDate = new Date(syncCursor);
+        const afterSeconds = Math.floor(cursorDate.getTime() / 1000);
+        query = `after:${afterSeconds}`;
+      } else {
+        const after = Math.floor((Date.now() - 90 * 24 * 60 * 60 * 1000) / 1000);
+        query = `after:${after}`;
+      }
 
       const listResponse = await fetch(
-        `https://www.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=100`,
+        `https://www.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=500`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
@@ -431,33 +437,41 @@ export class EmailSyncService {
 
       if (!listData.messages) return emails;
 
-      // Fetch individual messages (limit to 20 per sync)
-      const messagesToFetch = listData.messages.slice(0, 20);
+      // Process up to 100 messages per sync (fetched concurrently in batches of 10)
+      const messagesToFetch = listData.messages.slice(0, 100);
+      const FETCH_BATCH = 10;
 
-      for (const msg of messagesToFetch) {
-        const msgResponse = await fetch(
-          `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
+      for (let i = 0; i < messagesToFetch.length; i += FETCH_BATCH) {
+        const batch = messagesToFetch.slice(i, i + FETCH_BATCH);
+        const results = await Promise.all(
+          batch.map(async (msg) => {
+            const msgResponse = await fetch(
+              `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
+              { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+            if (!msgResponse.ok) return null;
+            return (await msgResponse.json()) as GmailMessage;
+          })
         );
 
-        if (!msgResponse.ok) continue;
+        for (const msgData of results) {
+          if (!msgData) continue;
 
-        const msgData = (await msgResponse.json()) as GmailMessage;
+          const subject =
+            msgData.payload.headers.find((h) => h.name === 'Subject')?.value ??
+            '(no subject)';
+          const from =
+            msgData.payload.headers.find((h) => h.name === 'From')?.value ?? '';
 
-        const subject =
-          msgData.payload.headers.find((h) => h.name === 'Subject')?.value ??
-          '(no subject)';
-        const from =
-          msgData.payload.headers.find((h) => h.name === 'From')?.value ?? '';
-
-        emails.push({
-          messageId: msgData.id,
-          threadId: msgData.threadId,
-          subject,
-          from,
-          receivedAt: new Date(parseInt(msgData.internalDate, 10)),
-          snippet: msgData.snippet ?? '',
-        });
+          emails.push({
+            messageId: msgData.id,
+            threadId: msgData.threadId,
+            subject,
+            from,
+            receivedAt: new Date(parseInt(msgData.internalDate, 10)),
+            snippet: msgData.snippet ?? '',
+          });
+        }
       }
     } catch (error) {
       logger.error('Failed to fetch Gmail emails:', error);
