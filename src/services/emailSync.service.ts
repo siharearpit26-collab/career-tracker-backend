@@ -363,6 +363,21 @@ export class EmailSyncService {
 
       return result;
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+
+      // If the refresh token is revoked, deactivate the account and notify the user
+      if (errMsg === 'GMAIL_REAUTH_REQUIRED') {
+        logger.warn(`Gmail refresh token revoked for ${account.email} — marking inactive, user must reconnect`);
+        await emailRepository.deactivateAccount(account._id.toString(), account.userId.toString());
+        await notificationRepository.create({
+          userId: account.userId.toString(),
+          title: 'Gmail reconnection required',
+          message: `Your Gmail account ${account.email} needs to be reconnected. Go to Email → Connected Accounts and reconnect it.`,
+          type: 'system',
+        });
+        return result;
+      }
+
       logger.error(`Email sync failed for ${account.email}:`, error);
       throw error;
     }

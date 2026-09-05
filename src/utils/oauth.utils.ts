@@ -117,6 +117,12 @@ export const refreshGmailToken = async (
   });
 
   if (!response.ok) {
+    const body = await response.text();
+    logger.error(`Gmail token refresh failed (${response.status}): ${body.slice(0, 200)}`);
+    // 400 with invalid_grant means the refresh token is revoked/expired
+    if (response.status === 400 && body.includes('invalid_grant')) {
+      throw new Error('GMAIL_REAUTH_REQUIRED');
+    }
     throw new Error('Failed to refresh Gmail token');
   }
 
