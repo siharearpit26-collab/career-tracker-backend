@@ -107,6 +107,22 @@ export class EmailService {
     await emailRepository.deleteByAccountId(id);
   }
 
+  // Reset sync cursor so next sync re-fetches last 90 days
+  async resetSync(userId: string, accountId?: string): Promise<void> {
+    if (accountId) {
+      await emailRepository.resetSyncCursor(accountId, userId);
+      // Also delete existing sync records for this account so they get re-classified
+      await emailRepository.deleteByAccountId(accountId);
+    } else {
+      await emailRepository.resetAllSyncCursors(userId);
+      // Delete all sync records for user
+      const accounts = await emailRepository.findAccountsByUserId(userId);
+      for (const account of accounts) {
+        await emailRepository.deleteByAccountId(account._id.toString());
+      }
+    }
+  }
+
   // Trigger manual sync for all user accounts
   async syncAll(userId: string): Promise<EmailSyncResult> {
     const accounts = await emailRepository.findAccountsByUserId(userId);

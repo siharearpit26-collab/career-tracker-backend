@@ -419,9 +419,11 @@ export class EmailSyncService {
         const cursorDate = new Date(syncCursor);
         const afterSeconds = Math.floor(cursorDate.getTime() / 1000);
         query = `after:${afterSeconds}`;
+        logger.info(`Gmail fetch: using cursor ${syncCursor} → after:${afterSeconds}`);
       } else {
         const after = Math.floor((Date.now() - 90 * 24 * 60 * 60 * 1000) / 1000);
         query = `after:${after}`;
+        logger.info(`Gmail fetch: no cursor, fetching last 90 days → after:${after}`);
       }
 
       const listResponse = await fetch(
@@ -434,6 +436,8 @@ export class EmailSyncService {
       }
 
       const listData = (await listResponse.json()) as GmailListResponse;
+
+      logger.info(`Gmail list response: ${listData.messages?.length ?? 0} message IDs returned (resultSizeEstimate: ${listData.resultSizeEstimate ?? 0})`);
 
       if (!listData.messages) return emails;
 

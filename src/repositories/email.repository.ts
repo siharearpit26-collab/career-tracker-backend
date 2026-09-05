@@ -99,6 +99,20 @@ export class EmailRepository {
     return EmailAccountModel.find({ isActive: true }).select('+accessToken +refreshToken');
   }
 
+  async resetSyncCursor(id: string, userId: string): Promise<void> {
+    await EmailAccountModel.findOneAndUpdate(
+      { _id: new Types.ObjectId(id), userId: new Types.ObjectId(userId) },
+      { $unset: { syncCursor: '', lastSyncedAt: '' } }
+    );
+  }
+
+  async resetAllSyncCursors(userId: string): Promise<void> {
+    await EmailAccountModel.updateMany(
+      { userId: new Types.ObjectId(userId) },
+      { $unset: { syncCursor: '', lastSyncedAt: '' } }
+    );
+  }
+
   // Email Sync operations
   async createSyncRecord(data: {
     emailAccountId: string;

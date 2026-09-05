@@ -236,6 +236,26 @@ export class EmailController {
     }
   }
 
+  // Reset sync cursor (forces full re-fetch on next sync)
+  async resetSync(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const accountId = req.params['id'];
+      await emailService.resetSync(req.userId!, accountId);
+      res.status(200).json({
+        success: true,
+        message: accountId
+          ? 'Sync reset for account. Click Sync Now to re-fetch all emails.'
+          : 'Sync reset for all accounts. Click Sync Now to re-fetch all emails.',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Get sync history
   async getSyncHistory(
     req: AuthenticatedRequest,
