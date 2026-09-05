@@ -107,6 +107,19 @@ export class EmailService {
     await emailRepository.deleteByAccountId(id);
   }
 
+  // Debug: return account sync state
+  async getSyncDebugInfo(userId: string): Promise<object> {
+    const accounts = await emailRepository.findAccountsByUserId(userId);
+    return accounts.map((a) => ({
+      id: a._id,
+      email: a.email,
+      provider: a.provider,
+      syncCursor: a.syncCursor ?? null,
+      lastSyncedAt: a.lastSyncedAt ?? null,
+      tokenExpiresAt: a.tokenExpiresAt,
+    }));
+  }
+
   // Reset sync cursor so next sync re-fetches last 90 days
   async resetSync(userId: string, accountId?: string): Promise<void> {
     if (accountId) {

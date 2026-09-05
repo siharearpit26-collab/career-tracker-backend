@@ -236,6 +236,20 @@ export class EmailController {
     }
   }
 
+  // Debug: show sync state for all accounts
+  async getSyncDebug(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const info = await emailService.getSyncDebugInfo(req.userId!);
+      res.status(200).json({ success: true, data: info });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Reset sync cursor (forces full re-fetch on next sync)
   async resetSync(
     req: AuthenticatedRequest,

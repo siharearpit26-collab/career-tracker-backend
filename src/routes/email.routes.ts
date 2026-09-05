@@ -28,6 +28,7 @@ router.delete('/accounts/:id', emailController.deleteAccount as RequestHandler);
 router.post('/sync', emailController.syncAll as RequestHandler);
 router.post('/sync/:id', emailController.syncAccount as RequestHandler);
 router.get('/sync/history', emailController.getSyncHistory as RequestHandler);
+router.get('/sync/debug', emailController.getSyncDebug as RequestHandler);
 router.post('/sync/reset', emailController.resetSync as RequestHandler);
 router.post('/sync/:id/reset', emailController.resetSync as RequestHandler);
 
