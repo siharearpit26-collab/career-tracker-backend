@@ -25,15 +25,22 @@ function extractCompany(from: string): string | undefined {
   const displayMatch = from.match(/^([^<]+)</);
   if (displayMatch?.[1]) {
     const name = displayMatch[1].trim()
-      .replace(/\b(no.?reply|noreply|careers?|recruiting?|talent|hr|jobs?|hiring|system|alert|notification|team|do.not.reply)\b/gi, '')
+      .replace(/\b(no.?reply|noreply|careers?|recruiting?|talent|hr|jobs?|hiring|acquisition|system|alert|notification|team|do.not.reply)\b/gi, '')
       .replace(/[^a-zA-Z0-9\s&.-]/g, '')
       .trim();
     if (name.length > 2 && name.length < 60) return name;
   }
-  const domainMatch = from.match(/@([^.>]+)/);
-  const domain = domainMatch?.[1];
-  if (domain && !JOB_PLATFORMS.some(p => domain.toLowerCase().includes(p))) {
-    return domain.charAt(0).toUpperCase() + domain.slice(1);
+  const emailMatch = from.match(/@([^>]+)/);
+  if (emailMatch?.[1]) {
+    const fullDomain = emailMatch[1].toLowerCase().replace(/[>\s]/g, '');
+    const cleaned = fullDomain
+      .replace(/^(mail|email|careers?|jobs?|notifications?|alerts?|no-?reply|noreply|auto|reply)\./i, '');
+    const parts = cleaned.split('.');
+    const companyPart = parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+    if (!companyPart) return undefined;
+    if (!JOB_PLATFORMS.some(p => companyPart.toLowerCase().includes(p))) {
+      return companyPart.charAt(0).toUpperCase() + companyPart.slice(1);
+    }
   }
   return undefined;
 }

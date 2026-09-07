@@ -60,6 +60,14 @@ const ALERT_PATTERNS = [
   /apply now/i,
   /trending/i,
   /top companies hiring/i,
+  // OTP / verification emails that are NOT job application updates
+  /identity verification/i,
+  /one.time (pass|code|password|otp)/i,
+  /verification code/i,
+  /\botp\b/i,
+  /confirm your (email|identity|account)/i,
+  /password reset/i,
+  /security code/i,
 ];
 
 function passesPreFilter(subject: string, from: string, snippet: string): boolean {
@@ -71,7 +79,6 @@ function passesPreFilter(subject: string, from: string, snippet: string): boolea
 
   // 2. Hard block: any LinkedIn email — job alerts, recommendations, digests
   if (fromLower.includes('linkedin.com')) return false;
-
   // 3. Hard block: subject/snippet looks like a job alert or social notification
   if (ALERT_PATTERNS.some((p) => p.test(subject) || p.test(snippet))) return false;
 
@@ -392,20 +399,28 @@ function extractCompanyFromSender(from: string): string | undefined {
   const displayMatch = from.match(/^([^<]+)</);
   if (displayMatch?.[1]) {
     const name = displayMatch[1].trim()
-      .replace(/\b(no.?reply|noreply|careers?|recruiting?|talent|hr|jobs?|hiring)\b/gi, '')
+      .replace(/\b(no.?reply|noreply|careers?|recruiting?|talent|hr|jobs?|hiring|acquisition|system|alert|notification|team|do.not.reply)\b/gi, '')
       .replace(/[^a-zA-Z0-9\s&.-]/g, '')
       .trim();
     if (name.length > 2 && name.length < 60) return name;
   }
-  // Fall back to domain name: "careers@genpact.com" → "Genpact"
-  const domainMatch = from.match(/@([^.>]+)/);
-  const domain = domainMatch?.[1];
-  if (domain) {
-    // Skip known job boards/platforms
+  // Fall back to domain: handle "noreply@mail.amazon.jobs" → "Amazon"
+  // Strip common prefixes like mail., email., careers., jobs., notifications.
+  const emailMatch = from.match(/@([^>]+)/);
+  if (emailMatch?.[1]) {
+    const fullDomain = emailMatch[1].toLowerCase().replace(/[>\s]/g, '');
+    // Remove common subdomains to get the main company domain
+    const cleaned = fullDomain
+      .replace(/^(mail|email|careers?|jobs?|notifications?|alerts?|no-?reply|noreply|auto|reply)\./i, '');
+    // Get the second-level domain (company name)
+    const parts = cleaned.split('.');
+    const companyPart = parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+    if (!companyPart) return undefined;
     const skipDomains = ['linkedin', 'naukri', 'indeed', 'glassdoor', 'monster',
-      'workday', 'lever', 'greenhouse', 'smartrecruiters', 'jobvite', 'mail', 'gmail'];
-    if (!skipDomains.some(s => domain.toLowerCase().includes(s))) {
-      return domain.charAt(0).toUpperCase() + domain.slice(1);
+      'workday', 'lever', 'greenhouse', 'smartrecruiters', 'jobvite', 'mail', 'gmail',
+      'yahoo', 'outlook', 'hotmail'];
+    if (!skipDomains.includes(companyPart.toLowerCase())) {
+      return companyPart.charAt(0).toUpperCase() + companyPart.slice(1);
     }
   }
   return undefined;
