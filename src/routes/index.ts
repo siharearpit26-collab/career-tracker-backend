@@ -10,6 +10,7 @@ import profileRoutes from './profile.routes';
 import setupRoutes from './setup.routes';
 import emailRoutes from './email.routes';
 import calendarRoutes from './calendar.routes';
+import migrationRoutes from './admin.migration.routes';
 import { discoveryAdminRoutes, jobsRoutes, alertsRoutes } from '../discovery/routes';
 
 const router = Router();
@@ -21,6 +22,7 @@ router.use('/reports', reportRoutes);
 router.use('/reminders', reminderRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/admin', adminRoutes);
+router.use('/admin', migrationRoutes);
 router.use('/profile', profileRoutes);
 router.use('/setup', setupRoutes);
 router.use('/email', emailRoutes);
