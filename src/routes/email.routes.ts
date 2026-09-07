@@ -24,13 +24,13 @@ router.get('/accounts', emailController.getAccounts as RequestHandler);
 router.patch('/accounts/:id/disconnect', emailController.disconnectAccount as RequestHandler);
 router.delete('/accounts/:id', emailController.deleteAccount as RequestHandler);
 
-// Sync
-router.post('/sync', emailController.syncAll as RequestHandler);
-router.post('/sync/:id', emailController.syncAccount as RequestHandler);
+// Sync — static routes MUST come before /:id routes
 router.get('/sync/history', emailController.getSyncHistory as RequestHandler);
 router.get('/sync/debug', emailController.getSyncDebug as RequestHandler);
 router.post('/sync/reset', emailController.resetSync as RequestHandler);
+router.post('/sync', emailController.syncAll as RequestHandler);
 router.post('/sync/:id/reset', emailController.resetSync as RequestHandler);
+router.post('/sync/:id', emailController.syncAccount as RequestHandler);
 
 // Classifications
 router.get('/classifications', emailController.getClassifications as RequestHandler);
