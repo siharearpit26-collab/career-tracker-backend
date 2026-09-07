@@ -172,17 +172,23 @@ export class EmailSyncService {
 
             // Only auto-create when AI CONFIDENTLY extracted a real company AND job title.
             // Do NOT fall back to sender-domain guessing (avoids "Naukri Campus", "LinkedIn" junk).
+            const JOB_PLATFORMS = ['linkedin', 'naukri', 'indeed', 'glassdoor', 'monster',
+              'shine', 'foundit', 'campus', 'workday', 'lever', 'greenhouse',
+              'ziprecruiter', 'wellfound', 'unstop', 'internshala', 'hirist',
+              'cutshort', 'angellist', 'iimjobs', 'timesjobs'];
+            const isJobPlatformEmail = !!classification.aiCompany &&
+              (JOB_PLATFORMS.some((p) => classification.aiCompany!.toLowerCase().includes(p)) ||
+              JOB_PLATFORMS.some((p) => email.from.toLowerCase().includes(p)));
+
             const isRealApplicationEmail =
               !resolvedApplicationId &&
+              !isJobPlatformEmail &&
               classification.classification !== 'unrelated' &&
               classification.confidence >= 0.65 &&
               !!classification.aiCompany &&
               classification.aiCompany.length > 2 &&
               !!classification.aiJobTitle &&
-              classification.aiJobTitle.length > 2 &&
-              // Reject known job-board/platform "company" names
-              !['linkedin', 'naukri', 'indeed', 'glassdoor', 'monster', 'shine', 'foundit', 'campus', 'workday', 'lever', 'greenhouse', 'ziprecruiter', 'wellfound']
-                .some((p) => classification.aiCompany!.toLowerCase().includes(p));
+              classification.aiJobTitle.length > 2;
 
             if (isRealApplicationEmail) {
               const company = classification.aiCompany!;

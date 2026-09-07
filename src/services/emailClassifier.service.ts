@@ -69,7 +69,10 @@ function passesPreFilter(subject: string, from: string, snippet: string): boolea
   // 1. Hard block: automated notification/alert senders
   if (BLOCKED_SENDERS.some((s) => fromLower.includes(s))) return false;
 
-  // 2. Hard block: subject/snippet looks like a job alert or social notification
+  // 2. Hard block: any LinkedIn email — job alerts, recommendations, digests
+  if (fromLower.includes('linkedin.com')) return false;
+
+  // 3. Hard block: subject/snippet looks like a job alert or social notification
   if (ALERT_PATTERNS.some((p) => p.test(subject) || p.test(snippet))) return false;
 
   // 3. Check known recruitment domains (fast pass)
