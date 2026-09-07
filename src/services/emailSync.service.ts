@@ -175,13 +175,13 @@ export class EmailSyncService {
             const isRealApplicationEmail =
               !resolvedApplicationId &&
               classification.classification !== 'unrelated' &&
-              classification.confidence >= 0.75 &&
+              classification.confidence >= 0.65 &&
               !!classification.aiCompany &&
               classification.aiCompany.length > 2 &&
               !!classification.aiJobTitle &&
               classification.aiJobTitle.length > 2 &&
               // Reject known job-board/platform "company" names
-              !['linkedin', 'naukri', 'indeed', 'glassdoor', 'monster', 'shine', 'foundit', 'campus']
+              !['linkedin', 'naukri', 'indeed', 'glassdoor', 'monster', 'shine', 'foundit', 'campus', 'workday', 'lever', 'greenhouse', 'ziprecruiter', 'wellfound']
                 .some((p) => classification.aiCompany!.toLowerCase().includes(p));
 
             if (isRealApplicationEmail) {

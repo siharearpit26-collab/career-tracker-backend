@@ -376,8 +376,55 @@ export class EmailClassifierService {
       processingMethod,
       fallbackReason,
       isPendingReview: confidence < 0.5,
+      // Extract company from sender name for rule-based auto-create
+      aiCompany: extractCompanyFromSender(from),
+      aiJobTitle: extractJobTitleFromSubject(subject),
     };
   }
+}
+
+// Extract company name from email sender e.g. "Genpact <genpact@myworkday.com>" → "Genpact"
+function extractCompanyFromSender(from: string): string | undefined {
+  // Try display name first: "Company Name <email>"
+  const displayMatch = from.match(/^([^<]+)</);
+  if (displayMatch?.[1]) {
+    const name = displayMatch[1].trim()
+      .replace(/\b(no.?reply|noreply|careers?|recruiting?|talent|hr|jobs?|hiring)\b/gi, '')
+      .replace(/[^a-zA-Z0-9\s&.-]/g, '')
+      .trim();
+    if (name.length > 2 && name.length < 60) return name;
+  }
+  // Fall back to domain name: "careers@genpact.com" → "Genpact"
+  const domainMatch = from.match(/@([^.>]+)/);
+  const domain = domainMatch?.[1];
+  if (domain) {
+    // Skip known job boards/platforms
+    const skipDomains = ['linkedin', 'naukri', 'indeed', 'glassdoor', 'monster',
+      'workday', 'lever', 'greenhouse', 'smartrecruiters', 'jobvite', 'mail', 'gmail'];
+    if (!skipDomains.some(s => domain.toLowerCase().includes(s))) {
+      return domain.charAt(0).toUpperCase() + domain.slice(1);
+    }
+  }
+  return undefined;
+}
+
+// Extract job title from email subject
+function extractJobTitleFromSubject(subject: string): string | undefined {
+  // Common patterns: "Thank you for applying for Software Engineer"
+  // "Your application for Data Analyst at Amazon"
+  const patterns = [
+    /(?:applying for|application for|applied for|position of|role of|job title[:\s]+)\s*[""']?([^""',\n]{3,60}?)(?:[""']|\s+at\s|\s+@\s|$)/i,
+    /(?:for the\s+)([A-Z][a-zA-Z\s]+(?:Engineer|Developer|Analyst|Manager|Designer|Intern|Associate|Consultant|Specialist|Executive|Officer|Lead|Architect)[^,\n]{0,30})/i,
+    /([A-Z][a-zA-Z\s]+(?:Engineer|Developer|Analyst|Manager|Designer|Intern|Associate|Consultant|Specialist|Executive|Officer|Lead|Architect))/,
+  ];
+  for (const pattern of patterns) {
+    const match = subject.match(pattern);
+    if (match?.[1]) {
+      const title = match[1].trim().replace(/\s+/g, ' ');
+      if (title.length > 3 && title.length < 80) return title;
+    }
+  }
+  return undefined;
 }
 
 export const emailClassifierService = new EmailClassifierService();
