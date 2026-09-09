@@ -91,8 +91,9 @@ export class EmailSyncService {
         }
       }
 
-      // Process each email in batches of 20 concurrently
-      const BATCH_SIZE = 20;
+      // Process emails one at a time to respect Gemini rate limits
+      // (free tier: 15 req/min — processing sequentially with built-in rate limiter)
+      const BATCH_SIZE = 1;
       const batchStats = {
         total: emails.length,
         preFilterPass: 0,

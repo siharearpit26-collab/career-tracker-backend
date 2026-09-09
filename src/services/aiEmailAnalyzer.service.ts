@@ -143,6 +143,26 @@ Rules:
 
 export class AIEmailAnalyzerService {
   private isAvailable: boolean = true;
+  // Rate limiter: max 10 requests per minute (free tier = 15/min, keep buffer)
+  private requestTimestamps: number[] = [];
+  private readonly MAX_REQUESTS_PER_MINUTE = 10;
+
+  private async waitForRateLimit(): Promise<void> {
+    const now = Date.now();
+    const oneMinuteAgo = now - 60 * 1000;
+    // Remove timestamps older than 1 minute
+    this.requestTimestamps = this.requestTimestamps.filter(t => t > oneMinuteAgo);
+    if (this.requestTimestamps.length >= this.MAX_REQUESTS_PER_MINUTE) {
+      // Wait until oldest request is > 1 minute old
+      const oldestRequest = this.requestTimestamps[0]!;
+      const waitMs = oldestRequest + 60 * 1000 - now + 100;
+      if (waitMs > 0) {
+        logger.info(`Gemini rate limit: waiting ${Math.round(waitMs / 1000)}s`);
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+      }
+    }
+    this.requestTimestamps.push(Date.now());
+  }
 
   async analyze(
     subject: string,
@@ -173,7 +193,10 @@ export class AIEmailAnalyzerService {
       const userPrompt = `Subject: ${subject}\nFrom: ${from}\nPreview: ${snippet}`;
       const prompt = `${SYSTEM_PROMPT}\n\n${userPrompt}`;
 
-      const response = await fetch(
+      // Wait for rate limit before calling
+      await this.waitForRateLimit();
+
+      const callGemini = async () => fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${config.openai.apiKey}`,
         {
           method: 'POST',
@@ -189,6 +212,16 @@ export class AIEmailAnalyzerService {
           signal: AbortSignal.timeout(15000),
         }
       );
+
+      let response = await callGemini();
+
+      // Retry once on 429 after waiting 60 seconds
+      if (response.status === 429) {
+        logger.warn('Gemini 429 rate limit hit — waiting 60s before retry');
+        await new Promise(resolve => setTimeout(resolve, 60000));
+        this.requestTimestamps = []; // Reset rate limit tracker
+        response = await callGemini();
+      }
 
       if (!response.ok) {
         const errBody = await response.text();
