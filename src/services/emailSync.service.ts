@@ -252,8 +252,7 @@ export class EmailSyncService {
             const conf = classification.confidence;
 
             if (
-              conf >= 0.75 &&                          // High confidence threshold
-              classification.processingMethod === 'ai' && // Only auto-update from AI, never rule-based
+              conf >= 0.75 &&
               resolvedApplicationId &&
               classification.suggestedStatus &&
               !classification.isPendingReview
