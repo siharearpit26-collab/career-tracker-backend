@@ -252,6 +252,7 @@ export class EmailSyncService {
 
             if (
               conf >= 0.75 &&                          // High confidence threshold
+              classification.processingMethod === 'ai' && // Only auto-update from AI, never rule-based
               resolvedApplicationId &&
               classification.suggestedStatus &&
               !classification.isPendingReview

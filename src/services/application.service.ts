@@ -83,6 +83,17 @@ export class ApplicationService {
     if (!deleted) {
       throw new NotFoundError('Application not found');
     }
+
+    // Unlink any email sync records that reference this application
+    try {
+      const { EmailSyncModel } = await import('../models');
+      await EmailSyncModel.updateMany(
+        { applicationId: new Types.ObjectId(id) },
+        { $unset: { applicationId: '', statusUpdate: '' } }
+      );
+    } catch {
+      // Non-critical — don't fail delete if email unlink fails
+    }
   }
 
   async archiveApplication(
