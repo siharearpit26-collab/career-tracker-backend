@@ -187,13 +187,14 @@ export class EmailSyncService {
               classification.classification !== 'unrelated' &&
               classification.confidence >= 0.65 &&
               !!classification.aiCompany &&
-              classification.aiCompany.length > 2 &&
-              !!classification.aiJobTitle &&
-              classification.aiJobTitle.length > 2;
+              classification.aiCompany.length > 2;
 
             if (isRealApplicationEmail) {
               const company = classification.aiCompany!;
-              const jobTitle = classification.aiJobTitle!;
+              // Use extracted job title or fall back to a generic title
+              const jobTitle = (classification.aiJobTitle && classification.aiJobTitle.length > 2)
+                ? classification.aiJobTitle
+                : 'Position';
 
               if (company && company.length > 1) {
                 try {
@@ -257,13 +258,24 @@ export class EmailSyncService {
               classification.suggestedStatus &&
               !classification.isPendingReview
             ) {
-              // Auto-update
+              // Auto-update only if new status is a progression, not a downgrade
+              const STATUS_RANK: Record<string, number> = {
+                'Applied': 1, 'Shortlisted': 2, 'Interview Scheduled': 3,
+                'Interview Completed': 4, 'Offer': 5, 'Rejected': 6, 'Withdrawn': 6,
+              };
               try {
                 const prevApp = await applicationRepository.findByIdAndUserId(
                   resolvedApplicationId,
                   account.userId.toString()
                 );
                 const prevStatus = prevApp?.status;
+                const prevRank = STATUS_RANK[prevStatus ?? ''] ?? 0;
+                const newRank = STATUS_RANK[classification.suggestedStatus] ?? 0;
+
+                // Only update if new status is higher rank (progression)
+                if (newRank <= prevRank) {
+                  logger.info(`Skipping status update: ${prevStatus} → ${classification.suggestedStatus} (not a progression)`);
+                } else {
 
                 await applicationRepository.update(
                   resolvedApplicationId,
@@ -321,6 +333,7 @@ export class EmailSyncService {
                     logger.warn('Failed to send status update email:', emailErr);
                   }
                 })();
+                } // end else (status is progression)
               } catch (err) {
                 logger.warn('Auto-update failed:', err);
                 batchStats.failed++;

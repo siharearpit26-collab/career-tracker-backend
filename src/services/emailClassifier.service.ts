@@ -176,7 +176,7 @@ function ruleBasedStatus(classification: EmailClassificationType): string | unde
     case 'interview': return 'Interview Scheduled';
     case 'offer': return 'Offer';
     case 'rejection': return 'Rejected';
-    case 'recruitment': return 'Shortlisted';
+    case 'recruitment': return 'Applied'; // "Thank you for applying" = Applied, not Shortlisted
     default: return undefined;
   }
 }
