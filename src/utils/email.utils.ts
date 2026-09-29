@@ -2,38 +2,38 @@ import nodemailer, { Transporter } from 'nodemailer';
 import { config } from '../config';
 import { logger } from './logger';
 
-// ── Email sending: tries Resend API first, falls back to SMTP ──────────────
+// ── Email sending: tries Brevo API first, falls back to SMTP ──────────────
 
-const sendViaResend = async (options: SendEmailOptions): Promise<boolean> => {
-  const resendKey = process.env['RESEND_API_KEY'];
-  if (!resendKey) return false;
+const sendViaBrevo = async (options: SendEmailOptions): Promise<boolean> => {
+  const brevoKey = process.env['BREVO_API_KEY'];
+  if (!brevoKey) return false;
 
   try {
-    const response = await fetch('https://api.resend.com/emails', {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${resendKey}`,
+        'api-key': brevoKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: `CareerTracker <onboarding@resend.dev>`,
-        to: [options.to],
+        sender: { name: 'CareerTracker', email: 'noreply@careertracker.app' },
+        to: [{ email: options.to }],
         subject: options.subject,
-        html: options.html,
-        text: options.text,
+        htmlContent: options.html,
+        textContent: options.text,
       }),
     });
 
     if (!response.ok) {
       const err = await response.text();
-      logger.warn(`Resend API error ${response.status}: ${err.slice(0, 200)}`);
+      logger.warn(`Brevo API error ${response.status}: ${err.slice(0, 200)}`);
       return false;
     }
 
-    logger.info(`Email sent via Resend to ${options.to}`);
+    logger.info(`Email sent via Brevo to ${options.to}`);
     return true;
   } catch (error) {
-    logger.warn('Resend send failed:', error);
+    logger.warn('Brevo send failed:', error);
     return false;
   }
 };
@@ -76,9 +76,9 @@ interface SendEmailOptions {
 }
 
 export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
-  // Try Resend first (works on Render - no SMTP port blocking)
-  const sentViaResend = await sendViaResend(options);
-  if (sentViaResend) return;
+  // Try Brevo first (works on Render - no SMTP port blocking)
+  const sentViaBrevo = await sendViaBrevo(options);
+  if (sentViaBrevo) return;
 
   // Fall back to SMTP
   try {
