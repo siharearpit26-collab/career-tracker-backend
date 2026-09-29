@@ -5,13 +5,17 @@ import { logger } from './logger';
 let transporter: Transporter | null = null;
 
 const createTransporter = (): Transporter => {
+  const port = config.email.port;
   return nodemailer.createTransport({
     host: config.email.host,
-    port: config.email.port,
-    secure: false,
+    port,
+    secure: port === 465, // true for 465 (SSL), false for 587 (STARTTLS)
     auth: {
       user: config.email.user,
       pass: config.email.password,
+    },
+    tls: {
+      rejectUnauthorized: false, // Allow self-signed certs
     },
   });
 };
@@ -21,6 +25,11 @@ const getTransporter = (): Transporter => {
     transporter = createTransporter();
   }
   return transporter;
+};
+
+// Reset transporter (call if config changes at runtime)
+export const resetTransporter = (): void => {
+  transporter = null;
 };
 
 interface SendEmailOptions {
