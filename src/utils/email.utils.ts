@@ -2,6 +2,42 @@ import nodemailer, { Transporter } from 'nodemailer';
 import { config } from '../config';
 import { logger } from './logger';
 
+// ── Email sending: tries Resend API first, falls back to SMTP ──────────────
+
+const sendViaResend = async (options: SendEmailOptions): Promise<boolean> => {
+  const resendKey = process.env['RESEND_API_KEY'];
+  if (!resendKey) return false;
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `CareerTracker <onboarding@resend.dev>`,
+        to: [options.to],
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      logger.warn(`Resend API error ${response.status}: ${err.slice(0, 200)}`);
+      return false;
+    }
+
+    logger.info(`Email sent via Resend to ${options.to}`);
+    return true;
+  } catch (error) {
+    logger.warn('Resend send failed:', error);
+    return false;
+  }
+};
+
 let transporter: Transporter | null = null;
 
 const createTransporter = (): Transporter => {
@@ -40,9 +76,13 @@ interface SendEmailOptions {
 }
 
 export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
+  // Try Resend first (works on Render - no SMTP port blocking)
+  const sentViaResend = await sendViaResend(options);
+  if (sentViaResend) return;
+
+  // Fall back to SMTP
   try {
     const emailTransporter = getTransporter();
-
     await emailTransporter.sendMail({
       from: `CareerTracker <${config.email.from}>`,
       to: options.to,
