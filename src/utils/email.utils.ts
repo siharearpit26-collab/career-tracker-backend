@@ -111,11 +111,7 @@ export const sendVerificationEmail = async (
       <h1 style="color: #333;">Verify Your Email</h1>
       <p>Thank you for registering with CareerTracker!</p>
       <p>Please click the button below to verify your email address:</p>
-      <a href="${verificationUrl}" 
-         style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; 
-                color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">
-        Verify Email
-      </a>
+      <a href="${verificationUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">Verify Email</a>
       <p>Or copy and paste this link into your browser:</p>
       <p style="color: #666; word-break: break-all;">${verificationUrl}</p>
       <p style="color: #999; font-size: 12px; margin-top: 30px;">
@@ -142,11 +138,7 @@ export const sendPasswordResetEmail = async (
       <h1 style="color: #333;">Reset Your Password</h1>
       <p>We received a request to reset your password.</p>
       <p>Click the button below to reset your password:</p>
-      <a href="${resetUrl}" 
-         style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; 
-                color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">
-        Reset Password
-      </a>
+      <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">Reset Password</a>
       <p>Or copy and paste this link into your browser:</p>
       <p style="color: #666; word-break: break-all;">${resetUrl}</p>
       <p style="color: #999; font-size: 12px; margin-top: 30px;">
