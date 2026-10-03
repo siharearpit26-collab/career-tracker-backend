@@ -134,22 +134,13 @@ export const sendPasswordResetEmail = async (
 ): Promise<void> => {
   const resetUrl = `${config.app.clientUrl}/reset-password?token=${resetToken}`;
 
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h1 style="color: #333;">Reset Your Password</h1>
-      <p>We received a request to reset your password.</p>
-      <p>Copy and paste this link into your browser to reset your password:</p>
-      <p style="background: #f4f4f4; padding: 12px; border-radius: 6px; word-break: break-all; font-family: monospace; font-size: 13px;">${resetUrl}</p>
-      <p style="color: #999; font-size: 12px; margin-top: 30px;">
-        This link will expire in 1 hour. If you didn't request a password reset, please ignore this email.
-      </p>
-    </div>
-  `;
+  const html = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1 style="color: #333;">Reset Your Password</h1><p>We received a request to reset your password.</p><p>Click this link to reset your password:</p><p><a href="${resetUrl}" style="color: #4F46E5;">${resetUrl}</a></p><p style="color: #999; font-size: 12px; margin-top: 30px;">This link will expire in 1 hour. If you didn't request a password reset, please ignore this email.</p></div>`;
 
   await sendEmail({
     to: email,
     subject: 'Reset Your Password - CareerTracker',
     html,
+    text: `Reset your CareerTracker password by visiting this link:\n\n${resetUrl}\n\nThis link expires in 1 hour.`,
   });
 };
 
