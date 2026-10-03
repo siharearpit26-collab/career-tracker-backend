@@ -6,7 +6,11 @@ import { logger } from './logger';
 const sendViaMailjet = async (options: SendEmailOptions): Promise<boolean> => {
   const apiKey = process.env['MAILJET_API_KEY'];
   const secretKey = process.env['MAILJET_SECRET_KEY'];
-  if (!apiKey || !secretKey) return false;
+  if (!apiKey || !secretKey) {
+    logger.error('Mailjet keys missing from environment');
+    return false;
+  }
+  logger.info(`Mailjet keys: API=${apiKey.slice(0,8)}... SECRET=${secretKey.slice(0,8)}...`);
 
   try {
     const credentials = Buffer.from(`${apiKey}:${secretKey}`).toString('base64');
