@@ -16,7 +16,7 @@ const sendViaBrevo = async (options: SendEmailOptions): Promise<boolean> => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        sender: { name: 'CareerTracker', email: 'noreply@careertracker.app' },
+        sender: { name: 'CareerTracker', email: 'scsit.arpit26@gmail.com' },
         to: [{ email: options.to }],
         subject: options.subject,
         htmlContent: options.html,
