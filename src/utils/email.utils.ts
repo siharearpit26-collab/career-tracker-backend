@@ -43,36 +43,6 @@ const sendViaBrevo = async (options: SendEmailOptions): Promise<boolean> => {
   }
 };
 
-let transporter: Transporter | null = null;
-
-const createTransporter = (): Transporter => {
-  const port = config.email.port;
-  return nodemailer.createTransport({
-    host: config.email.host,
-    port,
-    secure: port === 465, // true for 465 (SSL), false for 587 (STARTTLS)
-    auth: {
-      user: config.email.user,
-      pass: config.email.password,
-    },
-    tls: {
-      rejectUnauthorized: false, // Allow self-signed certs
-    },
-  });
-};
-
-const getTransporter = (): Transporter => {
-  if (!transporter) {
-    transporter = createTransporter();
-  }
-  return transporter;
-};
-
-// Reset transporter (call if config changes at runtime)
-export const resetTransporter = (): void => {
-  transporter = null;
-};
-
 interface SendEmailOptions {
   to: string;
   subject: string;
