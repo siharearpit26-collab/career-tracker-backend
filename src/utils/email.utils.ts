@@ -1,43 +1,43 @@
 import { config } from '../config';
 import { logger } from './logger';
 
-// ── Email sending via Brevo API (SMTP is blocked on Render) ──────────────
+// ── Email sending via Mailjet API (no link tracking) ──────────────
 
-const sendViaBrevo = async (options: SendEmailOptions): Promise<boolean> => {
-  const brevoKey = process.env['BREVO_API_KEY'];
-  if (!brevoKey) return false;
+const sendViaMailjet = async (options: SendEmailOptions): Promise<boolean> => {
+  const apiKey = process.env['MAILJET_API_KEY'];
+  const secretKey = process.env['MAILJET_SECRET_KEY'];
+  if (!apiKey || !secretKey) return false;
 
   try {
-    const payload = {
-      sender: { name: 'CareerTracker', email: 'scsit.arpit26@gmail.com' },
-      to: [{ email: options.to }],
-      subject: options.subject,
-      htmlContent: options.html,
-      textContent: options.text,
-      trackClicks: false,
-      trackOpens: false,
-    };
-
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    const credentials = Buffer.from(`${apiKey}:${secretKey}`).toString('base64');
+    const response = await fetch('https://api.mailjet.com/v3.1/send', {
       method: 'POST',
       headers: {
-        'api-key': brevoKey,
+        'Authorization': `Basic ${credentials}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        Messages: [{
+          From: { Email: 'scsit.arpit26@gmail.com', Name: 'CareerTracker' },
+          To: [{ Email: options.to }],
+          Subject: options.subject,
+          HTMLPart: options.html,
+          TextPart: options.text,
+        }],
+      }),
     });
 
     const respText = await response.text();
 
     if (!response.ok) {
-      logger.error(`Brevo API error ${response.status}: ${respText}`);
+      logger.error(`Mailjet API error ${response.status}: ${respText}`);
       return false;
     }
 
-    logger.info(`Email sent via Brevo to ${options.to}`);
+    logger.info(`Email sent via Mailjet to ${options.to}`);
     return true;
   } catch (error) {
-    logger.warn('Brevo send failed:', error);
+    logger.warn('Mailjet send failed:', error);
     return false;
   }
 };
@@ -50,11 +50,9 @@ interface SendEmailOptions {
 }
 
 export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
-  // Use Brevo API (HTTP - not blocked by Render)
-  const sentViaBrevo = await sendViaBrevo(options);
-  if (sentViaBrevo) return;
-
-  throw new Error('Failed to send email via Brevo API');
+  const sent = await sendViaMailjet(options);
+  if (sent) return;
+  throw new Error('Failed to send email via Mailjet');
 };
 
 export const sendVerificationEmail = async (
