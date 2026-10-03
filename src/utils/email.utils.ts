@@ -78,26 +78,27 @@ interface SendEmailOptions {
 }
 
 export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
-  // Try Brevo first (works on Render - no SMTP port blocking)
-  const sentViaBrevo = await sendViaBrevo(options);
-  if (sentViaBrevo) return;
-
-  // Fall back to SMTP
+  // Use SMTP (Brevo SMTP relay - no link tracking, works on Render)
   try {
     const emailTransporter = getTransporter();
     await emailTransporter.sendMail({
-      from: `CareerTracker <${config.email.from}>`,
+      from: `CareerTracker <${config.email.user || config.email.from}>`,
       to: options.to,
       subject: options.subject,
       html: options.html,
       text: options.text,
     });
-
     logger.info(`Email sent to ${options.to}`);
-  } catch (error) {
-    logger.error('Failed to send email:', error);
-    throw error;
+    return;
+  } catch (smtpError) {
+    logger.warn('SMTP failed, trying Brevo API:', smtpError);
   }
+
+  // Fallback: Brevo API
+  const sentViaBrevo = await sendViaBrevo(options);
+  if (sentViaBrevo) return;
+
+  throw new Error('All email sending methods failed');
 };
 
 export const sendVerificationEmail = async (
