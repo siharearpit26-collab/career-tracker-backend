@@ -1,8 +1,7 @@
-import nodemailer, { Transporter } from 'nodemailer';
 import { config } from '../config';
 import { logger } from './logger';
 
-// ── Email sending: tries Brevo API first, falls back to SMTP ──────────────
+// ── Email sending via Brevo API (SMTP is blocked on Render) ──────────────
 
 const sendViaBrevo = async (options: SendEmailOptions): Promise<boolean> => {
   const brevoKey = process.env['BREVO_API_KEY'];
