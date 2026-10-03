@@ -167,7 +167,7 @@ userSchema.methods['generateEmailVerificationToken'] = function (): string {
 };
 
 userSchema.methods['generatePasswordResetToken'] = function (): string {
-  const token = crypto.randomBytes(32).toString('hex');
+  const token = crypto.randomBytes(20).toString('hex'); // 40 chars — fits on one line in emails
   this.passwordResetToken = crypto
     .createHash('sha256')
     .update(token)
