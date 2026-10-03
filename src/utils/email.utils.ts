@@ -9,26 +9,29 @@ const sendViaBrevo = async (options: SendEmailOptions): Promise<boolean> => {
   if (!brevoKey) return false;
 
   try {
+    const payload = {
+      sender: { name: 'CareerTracker', email: 'scsit.arpit26@gmail.com' },
+      to: [{ email: options.to }],
+      subject: options.subject,
+      htmlContent: options.html,
+      textContent: options.text,
+      trackClicks: false,
+      trackOpens: false,
+    };
+
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
         'api-key': brevoKey,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        sender: { name: 'CareerTracker', email: 'scsit.arpit26@gmail.com' },
-        to: [{ email: options.to }],
-        subject: options.subject,
-        htmlContent: options.html,
-        textContent: options.text,
-        trackClicks: false,
-        trackOpens: false,
-      }),
+      body: JSON.stringify(payload),
     });
 
+    const respText = await response.text();
+
     if (!response.ok) {
-      const err = await response.text();
-      logger.warn(`Brevo API error ${response.status}: ${err.slice(0, 200)}`);
+      logger.error(`Brevo API error ${response.status}: ${respText}`);
       return false;
     }
 
@@ -78,27 +81,11 @@ interface SendEmailOptions {
 }
 
 export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
-  // Use SMTP (Brevo SMTP relay - no link tracking, works on Render)
-  try {
-    const emailTransporter = getTransporter();
-    await emailTransporter.sendMail({
-      from: `CareerTracker <${config.email.user || config.email.from}>`,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-      text: options.text,
-    });
-    logger.info(`Email sent to ${options.to}`);
-    return;
-  } catch (smtpError) {
-    logger.warn('SMTP failed, trying Brevo API:', smtpError);
-  }
-
-  // Fallback: Brevo API
+  // Use Brevo API (HTTP - not blocked by Render)
   const sentViaBrevo = await sendViaBrevo(options);
   if (sentViaBrevo) return;
 
-  throw new Error('All email sending methods failed');
+  throw new Error('Failed to send email via Brevo API');
 };
 
 export const sendVerificationEmail = async (
