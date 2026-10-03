@@ -138,10 +138,8 @@ export const sendPasswordResetEmail = async (
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h1 style="color: #333;">Reset Your Password</h1>
       <p>We received a request to reset your password.</p>
-      <p>Click the button below to reset your password:</p>
-      <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">Reset Password</a>
-      <p>Or copy and paste this link into your browser:</p>
-      <p style="color: #666; word-break: break-all;">${resetUrl}</p>
+      <p>Copy and paste this link into your browser to reset your password:</p>
+      <p style="background: #f4f4f4; padding: 12px; border-radius: 6px; word-break: break-all; font-family: monospace; font-size: 13px;">${resetUrl}</p>
       <p style="color: #999; font-size: 12px; margin-top: 30px;">
         This link will expire in 1 hour. If you didn't request a password reset, please ignore this email.
       </p>
