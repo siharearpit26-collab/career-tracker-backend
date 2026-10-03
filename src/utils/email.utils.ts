@@ -21,6 +21,8 @@ const sendViaBrevo = async (options: SendEmailOptions): Promise<boolean> => {
         subject: options.subject,
         htmlContent: options.html,
         textContent: options.text,
+        trackClicks: false,
+        trackOpens: false,
       }),
     });
 
