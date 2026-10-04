@@ -1,21 +1,7 @@
-import nodemailer from 'nodemailer';
 import { config } from '../config';
 import { logger } from './logger';
 
-// ── Email sending via Gmail OAuth2 (free, no third-party service) ──────────
-
-const createGmailTransporter = () => {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      type: 'OAuth2',
-      user: 'scsit.arpit26@gmail.com',
-      clientId: config.google.clientId,
-      clientSecret: config.google.clientSecret,
-      refreshToken: process.env['GMAIL_OAUTH_REFRESH_TOKEN'],
-    },
-  });
-};
+// ── Email sending via SendGrid API (HTTP - works on Render free tier) ──────
 
 interface SendEmailOptions {
   to: string;
@@ -25,26 +11,37 @@ interface SendEmailOptions {
 }
 
 export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
-  const refreshToken = process.env['GMAIL_OAUTH_REFRESH_TOKEN'];
-  if (!refreshToken) {
-    throw new Error('GMAIL_OAUTH_REFRESH_TOKEN not configured');
-  }
+  const apiKey = process.env['SENDGRID_API_KEY'];
+  if (!apiKey) throw new Error('SENDGRID_API_KEY not configured');
 
-  try {
-    const transporter = createGmailTransporter();
-    await transporter.sendMail({
-      from: 'CareerTracker <scsit.arpit26@gmail.com>',
-      to: options.to,
+  const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: options.to }] }],
+      from: { email: 'scsit.arpit26@gmail.com', name: 'CareerTracker' },
       subject: options.subject,
-      html: options.html,
-      text: options.text,
-    });
-    logger.info(`Email sent via Gmail OAuth2 to ${options.to}`);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`Gmail OAuth2 send failed: ${msg}`);
+      content: [
+        { type: 'text/html', value: options.html },
+        ...(options.text ? [{ type: 'text/plain', value: options.text }] : []),
+      ],
+      tracking_settings: {
+        click_tracking: { enable: false },
+        open_tracking: { enable: false },
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    logger.error(`SendGrid error ${response.status}: ${err.slice(0, 300)}`);
     throw new Error('Failed to send email');
   }
+
+  logger.info(`Email sent via SendGrid to ${options.to}`);
 };
 
 export const sendVerificationEmail = async (
