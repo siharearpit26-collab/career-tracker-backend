@@ -1,49 +1,20 @@
+import nodemailer from 'nodemailer';
 import { config } from '../config';
 import { logger } from './logger';
 
-// ── Email sending via Mailjet API (no link tracking) ──────────────
+// ── Email sending via Gmail OAuth2 (free, no third-party service) ──────────
 
-const sendViaMailjet = async (options: SendEmailOptions): Promise<boolean> => {
-  const apiKey = process.env['MAILJET_API_KEY'];
-  const secretKey = process.env['MAILJET_SECRET_KEY'];
-  if (!apiKey || !secretKey) {
-    logger.error('Mailjet keys missing from environment');
-    return false;
-  }
-  logger.info(`Mailjet keys: API=${apiKey.slice(0,8)}... SECRET=${secretKey.slice(0,8)}...`);
-
-  try {
-    const credentials = Buffer.from(`${apiKey}:${secretKey}`).toString('base64');
-    const response = await fetch('https://api.mailjet.com/v3.1/send', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${credentials}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        Messages: [{
-          From: { Email: 'scsit.arpit26@gmail.com', Name: 'CareerTracker' },
-          To: [{ Email: options.to }],
-          Subject: options.subject,
-          HTMLPart: options.html,
-          TextPart: options.text,
-        }],
-      }),
-    });
-
-    const respText = await response.text();
-
-    if (!response.ok) {
-      logger.error(`Mailjet API error ${response.status}: ${respText}`);
-      return false;
-    }
-
-    logger.info(`Email sent via Mailjet to ${options.to}`);
-    return true;
-  } catch (error) {
-    logger.warn('Mailjet send failed:', error);
-    return false;
-  }
+const createGmailTransporter = () => {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      type: 'OAuth2',
+      user: 'scsit.arpit26@gmail.com',
+      clientId: config.google.clientId,
+      clientSecret: config.google.clientSecret,
+      refreshToken: process.env['GMAIL_OAUTH_REFRESH_TOKEN'],
+    },
+  });
 };
 
 interface SendEmailOptions {
@@ -54,9 +25,26 @@ interface SendEmailOptions {
 }
 
 export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
-  const sent = await sendViaMailjet(options);
-  if (sent) return;
-  throw new Error('Failed to send email via Mailjet');
+  const refreshToken = process.env['GMAIL_OAUTH_REFRESH_TOKEN'];
+  if (!refreshToken) {
+    throw new Error('GMAIL_OAUTH_REFRESH_TOKEN not configured');
+  }
+
+  try {
+    const transporter = createGmailTransporter();
+    await transporter.sendMail({
+      from: 'CareerTracker <scsit.arpit26@gmail.com>',
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    });
+    logger.info(`Email sent via Gmail OAuth2 to ${options.to}`);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error(`Gmail OAuth2 send failed: ${msg}`);
+    throw new Error('Failed to send email');
+  }
 };
 
 export const sendVerificationEmail = async (
