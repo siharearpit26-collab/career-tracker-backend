@@ -25,8 +25,8 @@ export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
       from: { email: 'scsit.arpit26@gmail.com', name: 'CareerTracker' },
       subject: options.subject,
       content: [
+        ...(options.text ? [{ type: 'text/plain', value: options.text }] : [{ type: 'text/plain', value: options.subject }]),
         { type: 'text/html', value: options.html },
-        ...(options.text ? [{ type: 'text/plain', value: options.text }] : []),
       ],
       tracking_settings: {
         click_tracking: { enable: false },
