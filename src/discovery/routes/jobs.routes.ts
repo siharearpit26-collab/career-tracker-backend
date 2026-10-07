@@ -76,6 +76,26 @@ router.get('/recommended', (async (req: Request, res: Response, next: NextFuncti
   } catch (error) { next(error); }
 }) as RequestHandler);
 
+// GET /api/v1/jobs/user/saved  ← must be before /:id to avoid being shadowed
+router.get('/user/saved', (async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const { page = '1', limit = '20' } = req.query as Record<string, string>;
+
+    const result = await jobSearchService.getSavedJobs(
+      authReq.userId!,
+      parseInt(page, 10),
+      parseInt(limit, 10)
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Saved jobs retrieved',
+      data: result,
+    });
+  } catch (error) { next(error); }
+}) as RequestHandler);
+
 // GET /api/v1/jobs/:id
 router.get('/:id', (async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -117,26 +137,6 @@ router.delete('/:id/save', (async (req: Request, res: Response, next: NextFuncti
   } catch (error) { next(error); }
 }) as RequestHandler);
 
-// GET /api/v1/jobs/saved
-router.get('/user/saved', (async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const authReq = req as AuthenticatedRequest;
-    const { page = '1', limit = '20' } = req.query as Record<string, string>;
-
-    const result = await jobSearchService.getSavedJobs(
-      authReq.userId!,
-      parseInt(page, 10),
-      parseInt(limit, 10)
-    );
-
-    res.status(200).json({
-      success: true,
-      message: 'Saved jobs retrieved',
-      data: result,
-    });
-  } catch (error) { next(error); }
-}) as RequestHandler);
-
 // ─── Track Application ────────────────────────────────────────────────────────
 
 // POST /api/v1/jobs/:id/track
@@ -155,7 +155,7 @@ router.post('/:id/track', (async (req: Request, res: Response, next: NextFunctio
     const application = await applicationRepository.create(authReq.userId!, {
       company: job.company,
       jobTitle: job.title,
-      location: job.locations[0]?.city ?? job.rawLocation ?? '',
+      location: job.locations[0]?.city ?? job.rawLocation ?? undefined,
       status: 'Applied',
       source: 'Other',
       jobUrl: job.applicationUrl ?? job.sourceUrl,
