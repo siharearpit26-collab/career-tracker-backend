@@ -388,7 +388,7 @@ export class EmailClassifierService {
       isPendingReview: confidence < 0.5,
       // Extract company from sender name for rule-based auto-create
       aiCompany: extractCompanyFromSender(from),
-      aiJobTitle: extractJobTitleFromSubject(subject),
+      aiJobTitle: extractJobTitle(subject, snippet),
     };
   }
 }
@@ -426,23 +426,41 @@ function extractCompanyFromSender(from: string): string | undefined {
   return undefined;
 }
 
-// Extract job title from email subject
-function extractJobTitleFromSubject(subject: string): string | undefined {
-  // Common patterns: "Thank you for applying for Software Engineer"
-  // "Your application for Data Analyst at Amazon"
-  const patterns = [
-    /(?:applying for|application for|applied for|position of|role of|job title[:\s]+)\s*[""']?([^""',\n]{3,60}?)(?:[""']|\s+at\s|\s+@\s|$)/i,
-    /(?:for the\s+)([A-Z][a-zA-Z\s]+(?:Engineer|Developer|Analyst|Manager|Designer|Intern|Associate|Consultant|Specialist|Executive|Officer|Lead|Architect)[^,\n]{0,30})/i,
-    /([A-Z][a-zA-Z\s]+(?:Engineer|Developer|Analyst|Manager|Designer|Intern|Associate|Consultant|Specialist|Executive|Officer|Lead|Architect))/,
+// Extract job title from email subject and/or snippet body.
+// Covers common recruiter formats: Amazon, Wipro, Capgemini, Sutherland, etc.
+function extractJobTitle(subject: string, snippet?: string): string | undefined {
+  const sources = [subject, snippet ?? ''].filter(Boolean);
+
+  const patterns: RegExp[] = [
+    // "applying for / application for / applied for [role] at / @"
+    /(?:applying for|application for|applied for|position of|role of|job title[:\s]+)\s*[""']?([^""',\n]{3,80}?)(?:[""']|\s+at\s|\s+@\s|\s+\(ID|\s*$)/i,
+    // "for the [role]" — e.g. "for the Associate, ML Data Operations"
+    /\bfor the\s+([A-Za-z][A-Za-z0-9\s,\-\/&]{2,70}?)(?:\s+(?:at|position|role|post|job)\b|\s+\(ID|\s*[.,]|\s*$)/i,
+    // "your application: [role]" or "re: [role]"
+    /(?:your application[:\s-]+|re:\s*)([A-Z][A-Za-z0-9\s,\-\/&]{3,70})(?:\s+at\s|\s+\(|\s*$)/i,
+    // "position: [role]" or "role: [role]"
+    /(?:position|role|job)[:\s]+([A-Za-z][A-Za-z0-9\s,\-\/&]{3,70})(?:\s+at\s|\s*[.,\(]|\s*$)/i,
+    // Known job title keywords anywhere — catches "Software Engineer", "ML Data Operations", etc.
+    /(?:^|\s)([A-Z][a-zA-Z\s,\-]{2,}(?:Engineer|Developer|Analyst|Manager|Designer|Intern|Associate|Consultant|Specialist|Executive|Officer|Lead|Architect|Operations|Administrator|Coordinator|Scientist|Researcher|Strategist|Representative|Trainee|Graduate)[A-Za-z0-9\s,\-\/]{0,40})/,
   ];
-  for (const pattern of patterns) {
-    const match = subject.match(pattern);
-    if (match?.[1]) {
-      const title = match[1].trim().replace(/\s+/g, ' ');
-      if (title.length > 3 && title.length < 80) return title;
+
+  for (const src of sources) {
+    for (const pattern of patterns) {
+      const match = src.match(pattern);
+      if (match?.[1]) {
+        const title = match[1]
+          .trim()
+          .replace(/\s+/g, ' ')
+          // Strip trailing junk: "(ID: 12345)", "position", etc.
+          .replace(/\s*\(ID[:\s].*$/i, '')
+          .replace(/\s+(position|role|post|job)\s*$/i, '')
+          .trim();
+        if (title.length > 3 && title.length < 100) return title;
+      }
     }
   }
   return undefined;
 }
 
+export { extractJobTitle };
 export const emailClassifierService = new EmailClassifierService();

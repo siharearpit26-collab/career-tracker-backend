@@ -45,17 +45,29 @@ function extractCompany(from: string): string | undefined {
   return undefined;
 }
 
-function extractJobTitle(subject: string): string | undefined {
-  const patterns = [
-    /(?:applying for|application for|applied for|position of|role of|interest in the)\s*[""']?([^""',\n]{3,60}?)(?:[""']|\s+at\s|\s+@\s|$)/i,
-    /(?:for the\s+)([A-Z][a-zA-Z\s]+(?:Engineer|Developer|Analyst|Manager|Designer|Intern|Associate|Consultant|Specialist|Executive|Officer|Lead|Architect)[^,\n]{0,30})/i,
-    /([A-Z][a-zA-Z\s]{2,}(?:Engineer|Developer|Analyst|Manager|Designer|Intern|Associate|Consultant|Specialist|Executive|Officer|Lead|Architect))/,
+function extractJobTitle(subject: string, snippet?: string): string | undefined {
+  const sources = [subject, snippet ?? ''].filter(Boolean);
+
+  const patterns: RegExp[] = [
+    /(?:applying for|application for|applied for|position of|role of|interest in the|job title[:\s]+)\s*[""']?([^""',\n]{3,80}?)(?:[""']|\s+at\s|\s+@\s|\s+\(ID|\s*$)/i,
+    /\bfor the\s+([A-Za-z][A-Za-z0-9\s,\-\/&]{2,70}?)(?:\s+(?:at|position|role|post|job)\b|\s+\(ID|\s*[.,]|\s*$)/i,
+    /(?:your application[:\s-]+|re:\s*)([A-Z][A-Za-z0-9\s,\-\/&]{3,70})(?:\s+at\s|\s+\(|\s*$)/i,
+    /(?:position|role|job)[:\s]+([A-Za-z][A-Za-z0-9\s,\-\/&]{3,70})(?:\s+at\s|\s*[.,\(]|\s*$)/i,
+    /(?:^|\s)([A-Z][a-zA-Z\s,\-]{2,}(?:Engineer|Developer|Analyst|Manager|Designer|Intern|Associate|Consultant|Specialist|Executive|Officer|Lead|Architect|Operations|Administrator|Coordinator|Scientist|Researcher|Strategist|Representative|Trainee|Graduate)[A-Za-z0-9\s,\-\/]{0,40})/,
   ];
-  for (const pattern of patterns) {
-    const match = subject.match(pattern);
-    if (match?.[1]) {
-      const title = match[1].trim().replace(/\s+/g, ' ');
-      if (title.length > 3 && title.length < 80) return title;
+
+  for (const src of sources) {
+    for (const pattern of patterns) {
+      const match = src.match(pattern);
+      if (match?.[1]) {
+        const title = match[1]
+          .trim()
+          .replace(/\s+/g, ' ')
+          .replace(/\s*\(ID[:\s].*$/i, '')
+          .replace(/\s+(position|role|post|job)\s*$/i, '')
+          .trim();
+        if (title.length > 3 && title.length < 100) return title;
+      }
     }
   }
   return undefined;
@@ -88,7 +100,7 @@ router.post('/migrate-emails', (async (_req: Request, res: Response) => {
 
         // Extract company and job title
         const company = extractCompany(from);
-        const jobTitle = extractJobTitle(email.subject) ?? 'Position';
+        const jobTitle = extractJobTitle(email.subject, email.snippet) ?? 'Position';
 
         if (!company || company.length < 2) {
           skipped++;

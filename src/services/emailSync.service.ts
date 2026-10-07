@@ -1,5 +1,5 @@
 import { emailRepository } from '../repositories/email.repository';
-import { emailClassifierService } from './emailClassifier.service';
+import { emailClassifierService, extractJobTitle } from './emailClassifier.service';
 import { applicationRepository } from '../repositories/application.repository';
 import { notificationRepository } from '../repositories/notification.repository';
 import { decrypt } from '../utils/encryption.utils';
@@ -8,6 +8,20 @@ import { EmailSyncResult, IEmailAccountDocument } from '../types';
 import { logger } from '../utils/logger';
 import { sendStatusUpdateEmail } from '../utils/email.utils';
 import { userRepository } from '../repositories/user.repository';
+
+// Decode Gmail HTML-encoded snippet characters (e.g. &#39; → ', &amp; → &)
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 interface GmailMessage {
   id: string;
@@ -191,10 +205,11 @@ export class EmailSyncService {
 
             if (isRealApplicationEmail) {
               const company = classification.aiCompany!;
-              // Use extracted job title or fall back to a generic title
-              const jobTitle = (classification.aiJobTitle && classification.aiJobTitle.length > 2)
-                ? classification.aiJobTitle
-                : 'Position';
+              // Use extracted job title: AI result → regex from subject+snippet → generic fallback
+              const jobTitle =
+                (classification.aiJobTitle && classification.aiJobTitle.length > 2)
+                  ? classification.aiJobTitle
+                  : (extractJobTitle(email.subject, email.snippet) ?? 'Position');
 
               if (company && company.length > 1) {
                 try {
@@ -529,7 +544,7 @@ export class EmailSyncService {
             subject,
             from,
             receivedAt: new Date(parseInt(msgData.internalDate, 10)),
-            snippet: msgData.snippet ?? '',
+            snippet: decodeHtmlEntities(msgData.snippet ?? ''),
           });
         }
       }
