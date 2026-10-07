@@ -406,11 +406,17 @@ export class EmailSyncService {
 
       logger.info(`Email sync batch complete for ${account.email}: ${JSON.stringify(batchStats)}`);
 
-      // Update sync cursor
+      // Update sync cursor to the most recent email's receivedAt (+ 1s buffer so we
+      // don't re-fetch the boundary email on the next sync). Fall back to now if no
+      // emails were fetched this run.
+      const latestEmailTime = emails.length > 0
+        ? Math.max(...emails.map((e) => e.receivedAt.getTime()))
+        : Date.now();
+      const nextCursor = new Date(latestEmailTime + 1000);
       await emailRepository.updateSyncCursor(
         account._id.toString(),
-        new Date().toISOString(),
-        new Date()
+        nextCursor.toISOString(),
+        nextCursor
       );
 
       logger.info(
@@ -521,7 +527,7 @@ export class EmailSyncService {
         const results = await Promise.all(
           batch.map(async (msg) => {
             const msgResponse = await fetch(
-              `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
+              `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=minimal`,
               { headers: { Authorization: `Bearer ${accessToken}` } }
             );
             if (!msgResponse.ok) return null;

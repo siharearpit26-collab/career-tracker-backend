@@ -170,4 +170,74 @@ router.post('/migrate-emails', (async (_req: Request, res: Response) => {
   }
 }) as RequestHandler);
 
+// ─── Re-classify existing "Position" applications ──────────────────────────────
+// POST /api/admin/reclassify-positions
+// Finds all applications with jobTitle === "Position" that have a linked EmailSync record,
+// re-runs regex then AI on the stored subject+snippet, and patches the application.
+router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
+  try {
+    const { aiEmailAnalyzerService } = await import('../services/aiEmailAnalyzer.service');
+    const { ApplicationModel } = await import('../models');
+
+    // Find all applications with the generic placeholder title
+    const positionApps = await ApplicationModel.find({ jobTitle: 'Position' }).lean();
+    logger.info(`Reclassify: found ${positionApps.length} applications with jobTitle="Position"`);
+
+    let fixed = 0;
+    let skipped = 0;
+    let aiUsed = 0;
+
+    for (const app of positionApps) {
+      try {
+        // Find the most recent EmailSync linked to this application
+        const emailRecord = await EmailSyncModel.findOne({
+          applicationId: app._id,
+        }).sort({ receivedAt: -1 }).lean();
+
+        if (!emailRecord) {
+          skipped++;
+          continue;
+        }
+
+        const subject = emailRecord.subject ?? '';
+        const snippet = emailRecord.snippet ?? '';
+        const from = emailRecord.from ?? '';
+
+        // Stage 1: cheap regex — reuse the improved extractJobTitle
+        let newTitle = extractJobTitle(subject, snippet);
+
+        // Stage 2: AI if regex failed
+        if (!newTitle && subject) {
+          const aiResult = await aiEmailAnalyzerService.analyze(subject, from, snippet);
+          if (aiResult?.result.jobTitle && aiResult.result.jobTitle.length > 2) {
+            newTitle = aiResult.result.jobTitle;
+            aiUsed++;
+          }
+        }
+
+        if (!newTitle || newTitle === 'Position') {
+          skipped++;
+          continue;
+        }
+
+        await ApplicationModel.findByIdAndUpdate(app._id, { $set: { jobTitle: newTitle } });
+        logger.info(`Reclassify: updated app ${String(app._id)} → "${newTitle}" (company: ${app.company})`);
+        fixed++;
+      } catch (err) {
+        logger.warn(`Reclassify: failed for app ${String(app._id)}:`, err);
+        skipped++;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Reclassification complete: ${fixed} fixed (${aiUsed} via AI), ${skipped} skipped`,
+      data: { total: positionApps.length, fixed, aiUsed, skipped },
+    });
+  } catch (error) {
+    logger.error('Reclassify failed:', error);
+    res.status(500).json({ success: false, message: 'Reclassification failed' });
+  }
+}) as RequestHandler);
+
 export default router;
