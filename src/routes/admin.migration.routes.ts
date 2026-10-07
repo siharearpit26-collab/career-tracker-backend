@@ -95,13 +95,19 @@ router.post('/migrate-emails', (async (_req: Request, res: Response) => {
           continue;
         }
 
-        // Check if application already exists for this company
+        // Check if application already exists for this EXACT company + role combination
         const existing = await applicationRepository.findByUserId(
           userId, {}, { page: 1, limit: 200, sortBy: 'appliedDate', sortOrder: 'desc' }
         );
         const alreadyExists = existing.data.some(
-          (a: { company: string }) => a.company.toLowerCase().includes(company.toLowerCase()) ||
-                 company.toLowerCase().includes(a.company.toLowerCase())
+          (a: { company: string; jobTitle: string }) => {
+            const sameCompany = a.company.toLowerCase().includes(company.toLowerCase()) ||
+              company.toLowerCase().includes(a.company.toLowerCase());
+            const sameRole = jobTitle === 'Position' ||
+              a.jobTitle.toLowerCase() === jobTitle.toLowerCase() ||
+              a.jobTitle.toLowerCase().includes(jobTitle.toLowerCase().split(' ')[0] ?? '');
+            return sameCompany && sameRole;
+          }
         );
 
         if (alreadyExists) {

@@ -198,7 +198,27 @@ export class EmailSyncService {
 
               if (company && company.length > 1) {
                 try {
-                  const newApp = await applicationRepository.create(
+                  // Check if application already exists for this EXACT company + role combination
+                  const existingApps = await applicationRepository.findByUserId(
+                    account.userId.toString(),
+                    { isArchived: false },
+                    { page: 1, limit: 200, sortBy: 'appliedDate', sortOrder: 'desc' }
+                  );
+                  const duplicate = existingApps.data.some((a) => {
+                    const sameCompany = a.company.toLowerCase() === company.toLowerCase() ||
+                      a.company.toLowerCase().includes(company.toLowerCase()) ||
+                      company.toLowerCase().includes(a.company.toLowerCase());
+                    // Only skip if same company AND same job title (not just same company)
+                    const sameRole = jobTitle === 'Position' ||
+                      a.jobTitle.toLowerCase() === jobTitle.toLowerCase() ||
+                      a.jobTitle.toLowerCase().includes(jobTitle.toLowerCase().split(' ')[0]!);
+                    return sameCompany && sameRole;
+                  });
+
+                  if (duplicate) {
+                    logger.info(`Skipping duplicate: ${company} - ${jobTitle}`);
+                  } else {
+                    const newApp = await applicationRepository.create(
                     account.userId.toString(),
                     {
                       company,
@@ -242,6 +262,7 @@ export class EmailSyncService {
                     type: 'application_update',
                     applicationId: resolvedApplicationId,
                   });
+                  } // end else (not duplicate)
 
                 } catch (createErr) {
                   logger.warn(`Failed to auto-create application for "${company}":`, createErr);
