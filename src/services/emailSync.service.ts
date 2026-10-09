@@ -216,7 +216,12 @@ export class EmailSyncService {
                   // Duplicate check: same company + EXACT same job title + applied within 60 days.
                   // Different role at same company = new application, never skip it.
                   const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
-                  const duplicate = existingApps.data.some((a) => {
+                  const existingApps = await applicationRepository.findByUserId(
+                    account.userId.toString(),
+                    { isArchived: false },
+                    { page: 1, limit: 200, sortBy: 'appliedDate', sortOrder: 'desc' }
+                  );
+                  const duplicate = existingApps.data.some((a: { company: string; jobTitle: string; appliedDate: Date }) => {
                     const sameCompany =
                       a.company.toLowerCase() === company.toLowerCase() ||
                       a.company.toLowerCase().includes(company.toLowerCase()) ||
