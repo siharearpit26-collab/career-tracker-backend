@@ -4,6 +4,7 @@ import { applicationRepository } from '../repositories/application.repository';
 import { notificationRepository } from '../repositories/notification.repository';
 import { userRepository } from '../repositories/user.repository';
 import { sendStatusUpdateEmail } from '../utils/email.utils';
+import { EmailAccountModel } from '../models';
 import {
   exchangeGmailCode,
   exchangeOutlookCode,
@@ -57,7 +58,7 @@ export class EmailService {
       if (existing.isActive) {
         throw new ConflictError('This email account is already connected');
       }
-      // Reactivate if previously disconnected
+      // Reactivate if previously disconnected — clear cursor so next sync re-fetches 90 days
       const reactivated = await emailRepository.updateAccountTokens(
         existing._id.toString(),
         {
@@ -68,7 +69,13 @@ export class EmailService {
       );
       if (reactivated) {
         reactivated.isActive = true;
-        await reactivated.save();
+        // Clear the stale sync cursor so next sync re-fetches last 90 days
+        await EmailAccountModel.findByIdAndUpdate(existing._id, {
+          $set: { isActive: true },
+          $unset: { syncCursor: '', lastSyncedAt: '' },
+        });
+        // Delete old EmailSync records so they get re-classified fresh
+        await emailRepository.deleteByAccountId(existing._id.toString());
       }
       return reactivated!;
     }
