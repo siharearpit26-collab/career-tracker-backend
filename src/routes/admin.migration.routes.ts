@@ -307,6 +307,7 @@ router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
 
         if (!newTitle || newTitle === 'Position') {
           logger.warn(`Reclassify [${app.company}]: could not determine title — skipping`);
+          unfixed.push({ id: String(app._id), company: app.company });
           skipped++;
           continue;
         }
@@ -328,6 +329,7 @@ router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
         fixed,
         aiUsed,
         skipped,
+        unfixed,
         companies: positionApps.map((a) => a.company),
       },
     });
