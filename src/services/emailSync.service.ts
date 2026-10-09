@@ -527,7 +527,7 @@ export class EmailSyncService {
         const results = await Promise.all(
           batch.map(async (msg) => {
             const msgResponse = await fetch(
-              `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=minimal`,
+              `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
               { headers: { Authorization: `Bearer ${accessToken}` } }
             );
             if (!msgResponse.ok) return null;

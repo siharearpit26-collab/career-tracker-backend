@@ -173,11 +173,14 @@ router.post('/migrate-emails', (async (_req: Request, res: Response) => {
 // ─── Re-classify existing "Position" applications ──────────────────────────────
 // POST /api/admin/reclassify-positions
 // Finds all applications with jobTitle === "Position" that have a linked EmailSync record,
-// re-runs regex then AI on the stored subject+snippet, and patches the application.
+// fetches a fresh snippet from Gmail for the stored messageId, then re-runs regex + AI.
 router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
   try {
     const { aiEmailAnalyzerService } = await import('../services/aiEmailAnalyzer.service');
-    const { ApplicationModel } = await import('../models');
+    const { ApplicationModel, EmailAccountModel } = await import('../models');
+    const { decrypt } = await import('../utils/encryption.utils');
+    const { refreshGmailToken } = await import('../utils/oauth.utils');
+    const { emailRepository } = await import('../repositories/email.repository');
 
     // Find all applications with the generic placeholder title
     const positionApps = await ApplicationModel.find({ jobTitle: 'Position' }).lean();
@@ -187,6 +190,51 @@ router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
     let skipped = 0;
     let aiUsed = 0;
 
+    // Cache Gmail tokens per userId to avoid re-fetching on every record
+    const tokenCache = new Map<string, string>();
+
+    const getGmailToken = async (userId: string): Promise<string | null> => {
+      if (tokenCache.has(userId)) return tokenCache.get(userId)!;
+      const account = await EmailAccountModel.findOne({
+        userId: new Types.ObjectId(userId),
+        provider: 'gmail',
+        isActive: true,
+      }).select('+accessToken +refreshToken');
+      if (!account) return null;
+      // Refresh token if expired
+      const fiveMinutes = 5 * 60 * 1000;
+      let token = account.accessToken;
+      if (new Date().getTime() >= account.tokenExpiresAt.getTime() - fiveMinutes) {
+        try {
+          const refreshed = await refreshGmailToken(account.refreshToken);
+          await emailRepository.updateAccountTokens(account._id.toString(), {
+            accessToken: refreshed.accessToken,
+            tokenExpiresAt: refreshed.expiresAt,
+          });
+          token = refreshed.accessToken;
+        } catch {
+          return null;
+        }
+      }
+      const decrypted = decrypt(token);
+      tokenCache.set(userId, decrypted);
+      return decrypted;
+    };
+
+    const fetchSnippetFromGmail = async (accessToken: string, messageId: string): Promise<string> => {
+      try {
+        const res = await fetch(
+          `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
+          { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(8000) }
+        );
+        if (!res.ok) return '';
+        const data = await res.json() as { snippet?: string };
+        return data.snippet ?? '';
+      } catch {
+        return '';
+      }
+    };
+
     for (const app of positionApps) {
       try {
         // Find the most recent EmailSync linked to this application
@@ -194,16 +242,25 @@ router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
           applicationId: app._id,
         }).sort({ receivedAt: -1 }).lean();
 
-        if (!emailRecord) {
-          skipped++;
-          continue;
-        }
+        if (!emailRecord) { skipped++; continue; }
 
         const subject = emailRecord.subject ?? '';
-        const snippet = emailRecord.snippet ?? '';
         const from = emailRecord.from ?? '';
+        let snippet = emailRecord.snippet ?? '';
 
-        // Stage 1: cheap regex — reuse the improved extractJobTitle
+        // If stored snippet is empty, fetch fresh from Gmail
+        if (!snippet && emailRecord.messageId) {
+          const token = await getGmailToken(app.userId.toString());
+          if (token) {
+            snippet = decodeHtmlEntities(await fetchSnippetFromGmail(token, emailRecord.messageId));
+            // Persist the fresh snippet so future calls don't need to re-fetch
+            if (snippet) {
+              await EmailSyncModel.findByIdAndUpdate(emailRecord._id, { $set: { snippet } });
+            }
+          }
+        }
+
+        // Stage 1: regex on subject + fresh snippet
         let newTitle = extractJobTitle(subject, snippet);
 
         // Stage 2: AI if regex failed
@@ -215,13 +272,10 @@ router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
           }
         }
 
-        if (!newTitle || newTitle === 'Position') {
-          skipped++;
-          continue;
-        }
+        if (!newTitle || newTitle === 'Position') { skipped++; continue; }
 
         await ApplicationModel.findByIdAndUpdate(app._id, { $set: { jobTitle: newTitle } });
-        logger.info(`Reclassify: updated app ${String(app._id)} → "${newTitle}" (company: ${app.company})`);
+        logger.info(`Reclassify: ${app.company} → "${newTitle}"`);
         fixed++;
       } catch (err) {
         logger.warn(`Reclassify: failed for app ${String(app._id)}:`, err);
@@ -239,5 +293,14 @@ router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
     res.status(500).json({ success: false, message: 'Reclassification failed' });
   }
 }) as RequestHandler);
+
+// HTML entity decoder (duplicated here to avoid circular import from emailSync.service)
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
 
 export default router;
