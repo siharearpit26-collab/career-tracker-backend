@@ -244,46 +244,74 @@ router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
           applicationId: app._id,
         }).sort({ receivedAt: -1 }).lean();
 
-        if (!emailRecord) { skipped++; continue; }
+        // Also try finding by company name in the notes (auto-created apps store company in notes)
+        const emailRecordByNotes = !emailRecord
+          ? await EmailSyncModel.findOne({
+              userId: app.userId,
+              classification: { $in: ['recruitment', 'interview', 'offer'] },
+              $or: [
+                { subject: { $regex: app.company, $options: 'i' } },
+                { from: { $regex: app.company.replace(/[^a-zA-Z0-9]/g, ''), $options: 'i' } },
+              ],
+            }).sort({ receivedAt: -1 }).lean()
+          : null;
 
-        const subject = emailRecord.subject ?? '';
-        const from = emailRecord.from ?? '';
-        let snippet = emailRecord.snippet ?? '';
+        const record = emailRecord ?? emailRecordByNotes;
 
-        // Always fetch a fresh snippet from Gmail — stored ones may be empty (old format=metadata era)
-        if (emailRecord.messageId) {
+        const subject = record?.subject ?? '';
+        const from = record?.from ?? app.company; // use company as fallback context
+        let snippet = record?.snippet ?? '';
+
+        logger.info(`Reclassify [${app.company}]: emailRecord=${!!emailRecord}, byNotes=${!!emailRecordByNotes}, subject="${subject.slice(0, 60)}", snippet="${snippet.slice(0, 60)}"`);
+
+        // Always fetch a fresh snippet from Gmail if we have a messageId
+        if (record?.messageId) {
           try {
             const token = await getGmailToken(app.userId.toString());
             if (token) {
-              const fresh = decodeHtmlEntities(await fetchSnippetFromGmail(token, emailRecord.messageId));
+              const fresh = decodeHtmlEntities(await fetchSnippetFromGmail(token, record.messageId));
+              logger.info(`Reclassify [${app.company}]: fresh snippet="${fresh.slice(0, 80)}"`);
               if (fresh && fresh.length > snippet.length) {
                 snippet = fresh;
-                // Persist so future runs don't need to re-fetch
-                await EmailSyncModel.findByIdAndUpdate(emailRecord._id, { $set: { snippet: fresh } });
+                await EmailSyncModel.findByIdAndUpdate(record._id, { $set: { snippet: fresh } });
               }
+            } else {
+              logger.warn(`Reclassify [${app.company}]: no Gmail token`);
             }
-          } catch { /* non-critical */ }
+          } catch (tokenErr) {
+            logger.warn(`Reclassify [${app.company}]: token/snippet fetch failed:`, tokenErr);
+          }
         }
 
-        // Always call AI directly — regex alone is too weak for "Thank you for applying" subjects
+        // Call AI with whatever context we have
         let newTitle: string | undefined;
-        if (subject) {
-          const aiResult = await aiEmailAnalyzerService.analyze(subject, from, snippet);
+        if (subject || snippet) {
+          const aiResult = await aiEmailAnalyzerService.analyze(
+            subject || `Application to ${app.company}`,
+            from,
+            snippet
+          );
+          logger.info(`Reclassify [${app.company}]: AI returned jobTitle="${aiResult?.result.jobTitle ?? 'null'}"`);
           if (aiResult?.result.jobTitle && aiResult.result.jobTitle.length > 2) {
             newTitle = aiResult.result.jobTitle;
             aiUsed++;
           }
         }
 
-        // Fall back to regex if AI returned nothing
+        // Fall back to regex
         if (!newTitle) {
           newTitle = extractJobTitle(subject, snippet);
+          logger.info(`Reclassify [${app.company}]: regex returned="${newTitle ?? 'null'}"`);
         }
 
-        if (!newTitle || newTitle === 'Position') { skipped++; continue; }
+        if (!newTitle || newTitle === 'Position') {
+          logger.warn(`Reclassify [${app.company}]: could not determine title — skipping`);
+          skipped++;
+          continue;
+        }
 
         await ApplicationModel.findByIdAndUpdate(app._id, { $set: { jobTitle: newTitle } });
-        logger.info(`Reclassify: ${app.company} → "${newTitle}"`);
+        logger.info(`Reclassify [${app.company}]: ✓ updated to "${newTitle}"`);
         fixed++;
       } catch (err) {
         logger.warn(`Reclassify: failed for app ${String(app._id)}:`, err);
@@ -294,7 +322,13 @@ router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
     res.status(200).json({
       success: true,
       message: `Reclassification complete: ${fixed} fixed (${aiUsed} via AI), ${skipped} skipped`,
-      data: { total: positionApps.length, fixed, aiUsed, skipped },
+      data: {
+        total: positionApps.length,
+        fixed,
+        aiUsed,
+        skipped,
+        companies: positionApps.map((a) => a.company),
+      },
     });
   } catch (error) {
     logger.error('Reclassify failed:', error);
