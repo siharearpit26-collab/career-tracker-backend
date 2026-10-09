@@ -107,18 +107,20 @@ router.post('/migrate-emails', (async (_req: Request, res: Response) => {
           continue;
         }
 
-        // Check if application already exists for this EXACT company + role combination
+        // Duplicate: same company + EXACT same role (different role = new application)
+        const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
         const existing = await applicationRepository.findByUserId(
           userId, {}, { page: 1, limit: 200, sortBy: 'appliedDate', sortOrder: 'desc' }
         );
         const alreadyExists = existing.data.some(
-          (a: { company: string; jobTitle: string }) => {
+          (a: { company: string; jobTitle: string; appliedDate: Date }) => {
             const sameCompany = a.company.toLowerCase().includes(company.toLowerCase()) ||
               company.toLowerCase().includes(a.company.toLowerCase());
-            const sameRole = jobTitle === 'Position' ||
-              a.jobTitle.toLowerCase() === jobTitle.toLowerCase() ||
-              a.jobTitle.toLowerCase().includes(jobTitle.toLowerCase().split(' ')[0] ?? '');
-            return sameCompany && sameRole;
+            const sameRole =
+              jobTitle !== 'Position' &&
+              a.jobTitle.toLowerCase() === jobTitle.toLowerCase();
+            const isRecent = new Date(a.appliedDate) >= sixtyDaysAgo;
+            return sameCompany && sameRole && isRecent;
           }
         );
 

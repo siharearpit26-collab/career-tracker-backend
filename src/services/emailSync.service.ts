@@ -213,21 +213,24 @@ export class EmailSyncService {
 
               if (company && company.length > 1) {
                 try {
-                  // Check if application already exists for this EXACT company + role combination
-                  const existingApps = await applicationRepository.findByUserId(
-                    account.userId.toString(),
-                    { isArchived: false },
-                    { page: 1, limit: 200, sortBy: 'appliedDate', sortOrder: 'desc' }
-                  );
+                  // Duplicate check: same company + EXACT same job title + applied within 60 days.
+                  // Different role at same company = new application, never skip it.
+                  const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
                   const duplicate = existingApps.data.some((a) => {
-                    const sameCompany = a.company.toLowerCase() === company.toLowerCase() ||
+                    const sameCompany =
+                      a.company.toLowerCase() === company.toLowerCase() ||
                       a.company.toLowerCase().includes(company.toLowerCase()) ||
                       company.toLowerCase().includes(a.company.toLowerCase());
-                    // Only skip if same company AND same job title (not just same company)
-                    const sameRole = jobTitle === 'Position' ||
-                      a.jobTitle.toLowerCase() === jobTitle.toLowerCase() ||
-                      a.jobTitle.toLowerCase().includes(jobTitle.toLowerCase().split(' ')[0]!);
-                    return sameCompany && sameRole;
+
+                    // Only an exact title match counts — "Software Engineer" ≠ "Software Developer"
+                    const sameRole =
+                      jobTitle !== 'Position' &&
+                      a.jobTitle.toLowerCase() === jobTitle.toLowerCase();
+
+                    // Must also be recent (applied within 60 days) to be a true duplicate
+                    const isRecent = new Date(a.appliedDate) >= sixtyDaysAgo;
+
+                    return sameCompany && sameRole && isRecent;
                   });
 
                   if (duplicate) {
