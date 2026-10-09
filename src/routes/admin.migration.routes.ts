@@ -191,6 +191,7 @@ router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
     let fixed = 0;
     let skipped = 0;
     let aiUsed = 0;
+    const unfixed: Array<{ id: string; company: string }> = [];
 
     // Cache Gmail tokens per userId to avoid re-fetching on every record
     const tokenCache = new Map<string, string>();
