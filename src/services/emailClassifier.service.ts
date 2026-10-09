@@ -234,15 +234,16 @@ async function matchToApplication(
     if (company && company.length > 2) {
       const compLower = company.toLowerCase();
 
-      // Helper: job titles are compatible if they share significant keywords
-      // or if the existing app has the 'Position' placeholder (no real title yet)
+      // Helper: titles align only when there's actual evidence they match.
+      // If the email has no extracted title, we cannot confirm it belongs to an
+      // existing application — return false so auto-create handles it instead.
       const titlesAlign = (appTitle: string, emailTitle: string | null | undefined): boolean => {
-        if (appTitle === 'Position') return true; // placeholder — safe to link
-        if (!emailTitle || emailTitle.length < 3) return true; // AI didn't extract a title — allow match
+        if (appTitle === 'Position') return true; // placeholder — safe to link any email
+        if (!emailTitle || emailTitle.length < 3) return false; // no title from AI — can't confirm, let auto-create run
         const appWords = appTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
         const emailWords = emailTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
         const shared = appWords.filter((w) => emailWords.includes(w));
-        return shared.length >= 1; // at least one meaningful word in common
+        return shared.length >= 1;
       };
 
       // Exact company match with title check
@@ -281,11 +282,9 @@ async function matchToApplication(
             logger.info(`Matched email via text company + title: "${app.company}"`);
             return app._id.toString();
           }
-        } else {
-          // No job title from AI — safe to match by company alone
-          logger.info(`Matched email via text company: "${app.company}"`);
-          return app._id.toString();
         }
+        // No job title from AI and existing app has a real title — cannot confirm match.
+        // Fall through so a different role at the same company triggers auto-create.
       }
     }
 
@@ -296,17 +295,19 @@ async function matchToApplication(
         const c = app.company.toLowerCase().replace(/[^a-z0-9]/g, '');
         const d = senderDomain.replace(/[^a-z0-9]/g, '');
         if (d.includes(c) || c.includes(d)) {
-          if (app.jobTitle === 'Position' || !jobTitle || jobTitle.length < 3) {
-            logger.info(`Matched email via sender domain: "${app.company}"`);
+          if (app.jobTitle === 'Position') {
+            logger.info(`Matched email via sender domain (placeholder title): "${app.company}"`);
             return app._id.toString();
           }
-          const appWords = app.jobTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-          const emailWords = jobTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-          if (appWords.some((w) => emailWords.includes(w))) {
-            logger.info(`Matched email via sender domain + title: "${app.company}"`);
-            return app._id.toString();
+          if (jobTitle && jobTitle.length > 3) {
+            const appWords = app.jobTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+            const emailWords = jobTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+            if (appWords.some((w) => emailWords.includes(w))) {
+              logger.info(`Matched email via sender domain + title: "${app.company}"`);
+              return app._id.toString();
+            }
           }
-          // Different title at same company sender — do NOT match, let auto-create handle it
+          // No title match — fall through, let auto-create handle a new role
         }
       }
     }

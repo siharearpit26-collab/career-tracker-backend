@@ -250,28 +250,34 @@ router.post('/reclassify-positions', (async (_req: Request, res: Response) => {
         const from = emailRecord.from ?? '';
         let snippet = emailRecord.snippet ?? '';
 
-        // If stored snippet is empty, fetch fresh from Gmail
-        if (!snippet && emailRecord.messageId) {
-          const token = await getGmailToken(app.userId.toString());
-          if (token) {
-            snippet = decodeHtmlEntities(await fetchSnippetFromGmail(token, emailRecord.messageId));
-            // Persist the fresh snippet so future calls don't need to re-fetch
-            if (snippet) {
-              await EmailSyncModel.findByIdAndUpdate(emailRecord._id, { $set: { snippet } });
+        // Always fetch a fresh snippet from Gmail — stored ones may be empty (old format=metadata era)
+        if (emailRecord.messageId) {
+          try {
+            const token = await getGmailToken(app.userId.toString());
+            if (token) {
+              const fresh = decodeHtmlEntities(await fetchSnippetFromGmail(token, emailRecord.messageId));
+              if (fresh && fresh.length > snippet.length) {
+                snippet = fresh;
+                // Persist so future runs don't need to re-fetch
+                await EmailSyncModel.findByIdAndUpdate(emailRecord._id, { $set: { snippet: fresh } });
+              }
             }
-          }
+          } catch { /* non-critical */ }
         }
 
-        // Stage 1: regex on subject + fresh snippet
-        let newTitle = extractJobTitle(subject, snippet);
-
-        // Stage 2: AI if regex failed
-        if (!newTitle && subject) {
+        // Always call AI directly — regex alone is too weak for "Thank you for applying" subjects
+        let newTitle: string | undefined;
+        if (subject) {
           const aiResult = await aiEmailAnalyzerService.analyze(subject, from, snippet);
           if (aiResult?.result.jobTitle && aiResult.result.jobTitle.length > 2) {
             newTitle = aiResult.result.jobTitle;
             aiUsed++;
           }
+        }
+
+        // Fall back to regex if AI returned nothing
+        if (!newTitle) {
+          newTitle = extractJobTitle(subject, snippet);
         }
 
         if (!newTitle || newTitle === 'Position') { skipped++; continue; }
