@@ -198,7 +198,7 @@ export class EmailSyncService {
             const isRealApplicationEmail =
               !resolvedApplicationId &&
               !isJobPlatformEmail &&
-              classification.classification !== 'unrelated' &&
+              classification.classification === 'recruitment' &&  // ONLY "thank you for applying" emails create new applications
               classification.confidence >= 0.65 &&
               !!classification.aiCompany &&
               classification.aiCompany.length > 2;
