@@ -230,18 +230,33 @@ async function matchToApplication(
       }
     }
 
-    // Priority 3: AI-extracted company name
+    // Priority 3: AI-extracted company name — only match if job title also aligns
     if (company && company.length > 2) {
       const compLower = company.toLowerCase();
-      const match = apps.find((a) => a.company.toLowerCase() === compLower);
+
+      // Helper: job titles are compatible if they share significant keywords
+      // or if the existing app has the 'Position' placeholder (no real title yet)
+      const titlesAlign = (appTitle: string, emailTitle: string | null | undefined): boolean => {
+        if (appTitle === 'Position') return true; // placeholder — safe to link
+        if (!emailTitle || emailTitle.length < 3) return true; // AI didn't extract a title — allow match
+        const appWords = appTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+        const emailWords = emailTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+        const shared = appWords.filter((w) => emailWords.includes(w));
+        return shared.length >= 1; // at least one meaningful word in common
+      };
+
+      // Exact company match with title check
+      const match = apps.find((a) =>
+        a.company.toLowerCase() === compLower && titlesAlign(a.jobTitle, jobTitle)
+      );
       if (match) {
         logger.info(`Matched email via AI-extracted company: "${company}"`);
         return match._id.toString();
       }
-      // Partial match
+      // Partial company match with title check
       const partial = apps.find((a) => {
         const ac = a.company.toLowerCase();
-        return ac.includes(compLower) || compLower.includes(ac);
+        return (ac.includes(compLower) || compLower.includes(ac)) && titlesAlign(a.jobTitle, jobTitle);
       });
       if (partial) {
         logger.info(`Matched email via partial company name: "${company}"`);
@@ -249,25 +264,49 @@ async function matchToApplication(
       }
     }
 
-    // Priority 4: Text-based company name from email
+    // Priority 4: Text-based company name from email — require title alignment
     const text = `${subject} ${snippet} ${from}`.toLowerCase();
     for (const app of apps) {
       const c = app.company.toLowerCase();
       if (c.length > 2 && text.includes(c)) {
-        logger.info(`Matched email via text company: "${app.company}"`);
-        return app._id.toString();
+        // Only match if job title aligns — otherwise a new role at same company should auto-create
+        if (app.jobTitle === 'Position') {
+          logger.info(`Matched email via text company (placeholder title): "${app.company}"`);
+          return app._id.toString();
+        }
+        if (jobTitle && jobTitle.length > 3) {
+          const appWords = app.jobTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+          const emailWords = jobTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+          if (appWords.some((w) => emailWords.includes(w))) {
+            logger.info(`Matched email via text company + title: "${app.company}"`);
+            return app._id.toString();
+          }
+        } else {
+          // No job title from AI — safe to match by company alone
+          logger.info(`Matched email via text company: "${app.company}"`);
+          return app._id.toString();
+        }
       }
     }
 
-    // Priority 4b: Sender domain vs company
+    // Priority 4b: Sender domain vs company — only if title aligns or no AI title
     const senderDomain = from.toLowerCase().replace(/.*@/, '').replace(/>.*/, '').split('.')[0] ?? '';
     if (senderDomain.length > 2) {
       for (const app of apps) {
         const c = app.company.toLowerCase().replace(/[^a-z0-9]/g, '');
         const d = senderDomain.replace(/[^a-z0-9]/g, '');
         if (d.includes(c) || c.includes(d)) {
-          logger.info(`Matched email via sender domain: "${app.company}"`);
-          return app._id.toString();
+          if (app.jobTitle === 'Position' || !jobTitle || jobTitle.length < 3) {
+            logger.info(`Matched email via sender domain: "${app.company}"`);
+            return app._id.toString();
+          }
+          const appWords = app.jobTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+          const emailWords = jobTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+          if (appWords.some((w) => emailWords.includes(w))) {
+            logger.info(`Matched email via sender domain + title: "${app.company}"`);
+            return app._id.toString();
+          }
+          // Different title at same company sender — do NOT match, let auto-create handle it
         }
       }
     }
