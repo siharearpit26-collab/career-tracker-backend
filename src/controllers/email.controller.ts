@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { emailService } from '../services/email.service';
 import { AuthenticatedRequest, EmailClassificationType } from '../types';
+import { logger } from '../utils/logger';
 
 export class EmailController {
   // Get OAuth URL
@@ -126,19 +127,24 @@ export class EmailController {
     }
   }
 
-  // Trigger manual sync
+  // Trigger manual sync — responds immediately, processes in background
   async syncAll(
     req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
   ): Promise<void> {
     try {
-      const result = await emailService.syncAll(req.userId!);
-
-      res.status(200).json({
+      // Respond immediately so the request doesn't time out on Render's 30s limit
+      // The actual sync runs in the background (can take minutes for 100 emails via Gemini)
+      res.status(202).json({
         success: true,
-        message: 'Email sync completed',
-        data: result,
+        message: 'Sync started — check Email Feed in a minute for results',
+        data: { newEmails: 0, classified: 0, matched: 0, statusUpdates: 0 },
+      });
+
+      // Fire and forget — errors are logged internally
+      void emailService.syncAll(req.userId!).catch((err) => {
+        logger.error(`Background sync failed for user ${req.userId}:`, err);
       });
     } catch (error) {
       next(error);
