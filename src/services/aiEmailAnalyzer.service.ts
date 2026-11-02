@@ -134,11 +134,17 @@ Rules:
 - NEVER hallucinate company names, job titles, or dates not present in the email
 - Return null for any field not clearly present in the email
 - confidence reflects how certain you are about the classification (100 = absolutely certain)
-- isJobRelated = false for: job alerts/recommendations (e.g. "25 new jobs for you"), LinkedIn connection invitations, "someone viewed your profile", newsletters, promotions, digests, account alerts, and marketing emails
-- isJobRelated = true ONLY for emails about a SPECIFIC application the person actually submitted: application confirmations, interview invites, assessments, offers, rejections from a company the user applied to
+- isJobRelated = false for: job alerts/recommendations, LinkedIn connection invitations, "someone viewed your profile", newsletters, promotions, digests, account alerts, and marketing emails
+- isJobRelated = true ONLY for emails about a SPECIFIC application the person actually submitted
+
+CRITICAL category rules:
+- application_received: ONLY use when the email explicitly confirms the COMPANY received an application that the USER submitted (e.g. "Thank you for applying", "We received your application", "Application confirmation"). Do NOT use for recruiter outreach, cold messages, or inbound interest from a company.
+- shortlisted / assessment_sent / phone_screen_scheduled etc: use for emails where the company is moving the candidate forward in a process the candidate already started
+- follow_up: recruiter asking "are you still interested?", "complete your application", or checking availability
+- unknown: inbound recruiter outreach, cold messages, "we found your profile", "we'd like to connect" — these are NOT application confirmations
+
 - A job alert listing multiple jobs is NOT a job application — set isJobRelated = false
 - Set status to null unless the email clearly indicates a status change for a specific application the user submitted
-- For job alerts, recommendations, and invitations, set confidence low (below 40) and status to null
 - Return ONLY the JSON object, no markdown, no explanation`;
 
 export class AIEmailAnalyzerService {
